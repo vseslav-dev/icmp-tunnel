@@ -31,13 +31,13 @@ RC_t get_tun_fd(NetFD_t ** fds, CMD_t * args)
 	memset(&ifr, 0, sizeof(ifr));
 	ifr.ifr_flags = IFF_TUN;
 	strcpy(ifr.ifr_name, args->tun_name);
+	PR_DEBUG("tun name is: \"%s\"\n", ifr.ifr_name);
 	if ((err = ioctl(fd, TUNSETIFF, (void *)&ifr)) < 0) {
-		free(*fds), close(fd);
 		perror("ioctl TUNSETIFF set tun name");
+		free(*fds), close(fd);
 		return ERROR;
 	}
 
-	PR_DEBUG("tun name is: \"%s\"\n", ifr.ifr_name);
 
 	(*fds)->tun_fd = fd;
 	return SUCCESS;

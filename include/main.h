@@ -7,7 +7,7 @@
 #include <netdb.h>
 
 #define PROGRAM_NAME "icmp-tunnel"
-#define DEFAULT_TUN_NAME "icmp-tun"
+#define DEFAULT_TUN_NAME "tun50"
 
 #ifdef DEBUG
 #define PR_DEBUG(...) fprintf(stderr, __VA_ARGS__)
