@@ -108,6 +108,9 @@ RC_t do_server_icmp_communication(NetFD_t * fds, CMD_t * args)
 		return ERROR;
 	}
 
+	free_icmp_stuffs(stuffs);
+	return SUCCESS;
+
 	for (;;) {
 		FD_ZERO(&rfds);
 		FD_SET(net_fd, &rfds);
@@ -237,6 +240,10 @@ RC_t do_client_icmp_communication(NetFD_t * fds, CMD_t * args)
 		free_icmp_stuffs(stuffs);
 		return ERROR;
 	}
+
+	free_icmp_stuffs(stuffs);
+	return SUCCESS;
+
 	sel_to.tv_sec = 1;
 	sel_to.tv_usec = 0;
 
