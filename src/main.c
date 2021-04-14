@@ -24,6 +24,10 @@ void usage(FILE * stream);
 int EF_ALIGNMENT = 0;
 int EF_PROTECT_FREE = 1;
 #endif
+#ifdef EFENCE_PROTECT_BELOW
+int EF_PROTECT_BELOW = 1;
+int EF_PROTECT_FREE = 1;
+#endif
 
 int main(int argc, char **argv)
 {
@@ -60,7 +64,7 @@ int main(int argc, char **argv)
 	    ("Now you can setup ip address for tun"
 	     "interface and tune routing tables\n");
 
-	if (do_communication(fds, args) < SUCCESS) {
+	if (do_icmp_communication(fds, args) < SUCCESS) {
 		free_stuff(&args, &fds);
 		exit(EXIT_FAILURE);
 	}

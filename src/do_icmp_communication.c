@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <math.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -30,9 +32,15 @@ RC_t send_to_server(int net_fd, IcmpStuff_t * stuffs);
 RC_t send_icmp(int net_fd, struct pkt * send_pkt, struct sockaddr_in * addr,
 		uint32_t * pkt_size);
 
+RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs);
+
+RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs);
+
 uint16_t in_cksum(uint16_t * addr, size_t len);
 
 void free_icmp_stuffs(IcmpStuff_t * stuffs);
+
+#define ATTEMPT_CNT 3
 
 RC_t do_icmp_communication(NetFD_t * fds, CMD_t * args)
 {
@@ -92,6 +100,13 @@ RC_t do_server_icmp_communication(NetFD_t * fds, CMD_t * args)
 
 	sel_to.tv_sec = 1;
 	sel_to.tv_usec = 0;
+
+	if (get_first_packet(net_fd, stuffs) == ERROR) {
+		fprintf(stderr, "reading the first packet from client "
+				"returned an error\n");
+		free_icmp_stuffs(stuffs);
+		return ERROR;
+	}
 
 	for (;;) {
 		FD_ZERO(&rfds);
@@ -215,6 +230,13 @@ RC_t do_client_icmp_communication(NetFD_t * fds, CMD_t * args)
 	stuffs->server_addr->sin_port = 0;
 	stuffs->server_addr->sin_addr = args->ip_addr.remote_ip;
 
+	if (send_first_packet(net_fd, stuffs) == ERROR) {
+		fprintf(stderr, "sending the first packet to client "
+				"returned an error\n");
+
+		free_icmp_stuffs(stuffs);
+		return ERROR;
+	}
 	sel_to.tv_sec = 1;
 	sel_to.tv_usec = 0;
 
@@ -293,6 +315,138 @@ RC_t do_client_icmp_communication(NetFD_t * fds, CMD_t * args)
 		return ERROR;
 	else
 		return SUCCESS;
+}
+
+RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
+{
+	socklen_t sock_len = sizeof(struct sockaddr);
+	uint32_t i, pkt_size = sizeof(struct pkt) - PKT_STUFF_SIZE;
+	ssize_t nr;
+	uint16_t cksum;
+	for (i = 0; i < ATTEMPT_CNT; i++) {
+		if ((nr = recvfrom(net_fd, &stuffs->recv_pkt,
+					sizeof(struct pkt) -
+					PAYLOAD_SIZE, MSG_WAITALL,
+					(struct sockaddr *)&stuffs->client_addr,
+					&sock_len)) == -1) {
+			perror("recvfrom firts packet");
+			continue;
+		}
+		cksum = ntohs(stuffs->recv_pkt->hdr.checksum);
+		stuffs->recv_pkt->hdr.checksum = 0;
+		if (cksum != in_cksum((uint16_t *)&stuffs->recv_pkt,
+				nr)) {
+			PR_DEBUG("wrong checksum in incoming packet\n");
+			continue;
+		}
+		PR_DEBUG("first packet size is %zu should be %zu\n",
+				nr,
+				(sizeof(struct pkt) - PAYLOAD_SIZE));
+		if (stuffs->recv_pkt->first_packet != true) {
+			PR_DEBUG("first packet is not \"first packet\"\n");
+			continue;
+		}
+		stuffs->seq
+			= ntohs(stuffs->recv_pkt->hdr.un.echo.sequence);
+		stuffs->send_pkt->hdr.un.echo.sequence = htons(stuffs->seq);
+		stuffs->send_pkt->first_packet = true;
+		stuffs->send_pkt->len = 0;
+		stuffs->send_pkt->hdr.checksum = 0;
+		stuffs->send_pkt->hdr.checksum =
+			htons(in_cksum((uint16_t *)&stuffs->send_pkt,
+						sizeof(struct pkt)));
+		if (send_icmp(net_fd, stuffs->send_pkt,
+					stuffs->client_addr,
+					&pkt_size) == ERROR) {
+			fprintf(stderr, "cannot send answer to first packet\n");
+			return ERROR;
+		}
+	}
+	return SUCCESS;
+}
+
+RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
+{
+	socklen_t sock_len = sizeof(struct sockaddr),
+		  setsockopt_len = sizeof(int);
+	struct timeval tv;
+	double integer;
+	int level = 0, optname = 0, optval = 0;
+	uint32_t i, pkt_size = sizeof(struct pkt) - PKT_STUFF_SIZE;
+	ssize_t nr;
+	uint16_t cksum, seq;
+	tv.tv_usec = modf(stuffs->rto, &integer) * 1000000;
+	tv.tv_sec = integer;
+	if (getsockopt(net_fd, level, optname, &optval,
+				&setsockopt_len) == -1) {
+		perror("getsockopt");
+		return ERROR;
+	}
+	for (i = 0; i < ATTEMPT_CNT; i++) {
+		seq = stuffs->seq;
+		stuffs->send_pkt->hdr.un.echo.sequence = htons(stuffs->seq++);
+		stuffs->send_pkt->len = 0;
+		stuffs->send_pkt->first_packet = true;
+		stuffs->send_pkt->hdr.checksum = 0;
+		stuffs->send_pkt->hdr.checksum = htons(in_cksum((uint16_t *)
+					&stuffs->send_pkt,
+					sizeof(struct pkt) - PAYLOAD_SIZE));
+		if (send_icmp(net_fd, stuffs->send_pkt, stuffs->client_addr,
+					&pkt_size) == ERROR) {
+			fprintf(stderr, "send first packet error\n");
+			return ERROR;
+		}
+		if (setsockopt(net_fd, level, SO_RCVTIMEO, (const void *)&tv,
+					sizeof(tv)) == -1) {
+			perror("setsockopt");
+			return ERROR;
+		}
+		if ((nr = recvfrom(net_fd, &stuffs->recv_pkt,
+					sizeof(struct pkt) -
+					PAYLOAD_SIZE, MSG_WAITALL,
+					(struct sockaddr *)&stuffs->server_addr,
+					&sock_len)) == -1) {
+			perror("recvfrom firts packet");
+			continue;
+		}
+		if (setsockopt(net_fd, level, optname, &optval,
+					setsockopt_len) == -1) {
+			perror("setsockopt");
+			return ERROR;
+		}
+		if (stuffs->server_addr->sin_addr.s_addr !=
+				stuffs->client_addr->sin_addr.s_addr) {
+			PR_DEBUG("packet was received from wrong address: %s\n",
+					inet_ntoa(stuffs->
+						server_addr->sin_addr));
+			PR_DEBUG("valid address is: %s\n",
+					inet_ntoa(stuffs->
+						client_addr->sin_addr));
+			continue;
+		}
+		cksum = ntohs(stuffs->recv_pkt->hdr.checksum);
+		stuffs->recv_pkt->hdr.checksum = 0;
+		if (cksum != in_cksum((uint16_t *)&stuffs->recv_pkt,
+				nr)) {
+			PR_DEBUG("wrong checksum in incoming packet\n");
+			continue;
+		}
+		PR_DEBUG("first packet size is %zu should be %zu\n",
+				nr,
+				(sizeof(struct pkt) - PAYLOAD_SIZE));
+		if (stuffs->recv_pkt->first_packet != true) {
+			PR_DEBUG("first packet is not \"first packet\"\n");
+			continue;
+		}
+		if (seq != ntohs(stuffs->recv_pkt->hdr.un.echo.sequence)) {
+			PR_DEBUG("sequence %hu is not a valid sequence %hu\n",
+					ntohs(stuffs->
+						recv_pkt->hdr.un.echo.sequence),
+					seq);
+		}
+
+	}
+	return SUCCESS;
 }
 
 RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
@@ -537,7 +691,6 @@ RC_t send_icmp(int net_fd, struct pkt * send_pkt, struct sockaddr_in * addr,
 		uint32_t * pkt_size)
 	/* pkt_size is payload size (include icmphdr and PKT_STUFF_SIZE) */
 {
-#define ATTEMPT_CNT 3
 	int send_cnt, attempt;
 	for (attempt = ATTEMPT_CNT;;) {
 		if ((send_cnt = sendto(net_fd, send_pkt, *pkt_size,

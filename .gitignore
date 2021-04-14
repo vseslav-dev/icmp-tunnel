@@ -3,6 +3,8 @@ cscope.out
 *.swp
 ./src/*.o
 ./src/*.d
+*.o
+*.d
 icmp-tunnel
 example.c
 example/*

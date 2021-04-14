@@ -18,14 +18,14 @@
 			+ sizeof(struct icmphdr) \
 			+ sizeof(uint32_t) \
 			+ sizeof(uint16_t) * 2 \
-			+ sizeof(bool) * 3))
+			+ sizeof(bool) * 4))
 
 struct pkt {
 	struct icmphdr hdr;
 	uint16_t len; /* len of PAYLOAD_SIZE */
 	uint16_t cwnd;
 	uint32_t ack_num;
-	bool need_icmp_fl, need_ack, hangup;
+	bool need_icmp_fl, need_ack, hangup, first_packet;
 	uint8_t data[PAYLOAD_SIZE];
 } __attribute__((packed));
 
@@ -42,7 +42,7 @@ typedef struct {
 } IcmpStuff_t;
 
 #define INITIAL_CWND_SIZE 2
-#define INITIAL_RTO 1.5
+#define INITIAL_RTO 3.5
 #define MAX_CWND_SIZE 2
 #define BUF_SIZE (PAYLOAD_SIZE * MAX_CWND_SIZE)
 #define PKT_STUFF_SIZE (sizeof(struct pkt) - PAYLOAD_SIZE)
