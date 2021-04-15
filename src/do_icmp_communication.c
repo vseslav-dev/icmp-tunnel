@@ -200,7 +200,13 @@ RC_t do_client_icmp_communication(NetFD_t * fds, CMD_t * args)
 		free_icmp_stuffs(stuffs);
 		return ERROR;
 	}
-	stuffs->buffer = malloc(BUF_SIZE);
+	stuffs->client_addr = calloc(1, sizeof(struct sockaddr_in));
+	if (stuffs->client_addr == NULL) {
+		perror("calloc client_addr");
+		free_icmp_stuffs(stuffs);
+		return ERROR;
+	}
+	stuffs->buffer = calloc(1, BUF_SIZE);
 	if (stuffs->buffer == NULL) {
 		perror("malloc buffer");
 		free_icmp_stuffs(stuffs);
@@ -225,13 +231,19 @@ RC_t do_client_icmp_communication(NetFD_t * fds, CMD_t * args)
 		err_fl = true;
 	} */
 
+	stuffs->pkt_id = args->session_id;
 	stuffs->send_pkt->hdr.un.echo.id = htons(stuffs->pkt_id);
+	PR_DEBUG("ICMP_ECHO is: %d\n", ICMP_ECHO);
 	stuffs->send_pkt->hdr.type = ICMP_ECHO;
 	stuffs->send_pkt->hdr.code = ICMP_ECHOREPLY;
 
 	stuffs->server_addr->sin_family = AF_INET;
 	stuffs->server_addr->sin_port = 0;
 	stuffs->server_addr->sin_addr = args->ip_addr.remote_ip;
+
+	PR_DEBUG("len of pkt: %zu, len of pkt - PAYLOAD_SIZE: %zu\n",
+			sizeof(struct pkt),
+			(sizeof(struct pkt) - PAYLOAD_SIZE));
 
 	if (send_first_packet(net_fd, stuffs) == ERROR) {
 		fprintf(stderr, "sending the first packet to client "
@@ -309,8 +321,8 @@ RC_t do_client_icmp_communication(NetFD_t * fds, CMD_t * args)
 			send_pkt->cwnd = htons(stuffs->cwnd);
 			send_pkt->hdr.checksum = 0;
 			send_pkt->hdr.checksum
-				= htons(in_cksum((uint16_t *)send_pkt,
-							pkt_size));
+				= in_cksum((uint16_t *)send_pkt,
+							pkt_size);
 			send_icmp(net_fd, send_pkt, stuffs->server_addr,
 					&pkt_size);
 		}
@@ -339,7 +351,7 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 			perror("recvfrom firts packet");
 			continue;
 		}
-		cksum = ntohs(stuffs->recv_pkt->hdr.checksum);
+		cksum = stuffs->recv_pkt->hdr.checksum;
 		stuffs->recv_pkt->hdr.checksum = 0;
 		if (cksum != in_cksum((uint16_t *)&stuffs->recv_pkt,
 				nr)) {
@@ -360,8 +372,8 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 		stuffs->send_pkt->len = 0;
 		stuffs->send_pkt->hdr.checksum = 0;
 		stuffs->send_pkt->hdr.checksum =
-			htons(in_cksum((uint16_t *)&stuffs->send_pkt,
-						sizeof(struct pkt)));
+			in_cksum((uint16_t *)&stuffs->send_pkt,
+						sizeof(struct pkt));
 		if (send_icmp(net_fd, stuffs->send_pkt,
 					stuffs->client_addr,
 					&pkt_size) == ERROR) {
@@ -374,13 +386,15 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 
 RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 {
+	struct sockaddr_in addr;
 	struct timeval tv, optval;
 	socklen_t sock_len = sizeof(struct sockaddr),
 		  setsockopt_len = sizeof(optval);
 	double integer;
-	uint32_t i, pkt_size = sizeof(struct pkt) - PKT_STUFF_SIZE;
+	uint32_t i, pkt_size = (sizeof(struct pkt) - PAYLOAD_SIZE);
 	ssize_t nr;
 	uint16_t cksum, seq;
+	PR_DEBUG("size of packet: %iu\n", pkt_size);
 	tv.tv_usec = modf(stuffs->rto, &integer) * 1000000;
 	tv.tv_sec = integer;
 	if (getsockopt(net_fd, SOL_SOCKET, SO_RCVTIMEO, &optval,
@@ -394,13 +408,12 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 		stuffs->send_pkt->len = 0;
 		stuffs->send_pkt->first_packet = true;
 		stuffs->send_pkt->hdr.checksum = 0;
-		stuffs->send_pkt->hdr.checksum = htons(in_cksum((uint16_t *)
-					&stuffs->send_pkt,
-					(sizeof(struct pkt) - PAYLOAD_SIZE)));
-		if (send_icmp(net_fd, stuffs->send_pkt, stuffs->client_addr,
+		stuffs->send_pkt->hdr.checksum = in_cksum((uint16_t *)
+					stuffs->send_pkt, pkt_size);
+		if (send_icmp(net_fd, stuffs->send_pkt, stuffs->server_addr,
 					&pkt_size) == ERROR) {
 			fprintf(stderr, "send first packet error\n");
-			return ERROR;
+			continue;
 		}
 		if (setsockopt(net_fd, SOL_SOCKET, SO_RCVTIMEO,
 					(const void *)&tv,
@@ -408,10 +421,10 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 			perror("setsockopt");
 			return ERROR;
 		}
-		if ((nr = recvfrom(net_fd, &stuffs->recv_pkt,
+		if ((nr = recvfrom(net_fd, stuffs->recv_pkt,
 					sizeof(struct pkt) -
 					PAYLOAD_SIZE, MSG_WAITALL,
-					(struct sockaddr *)&stuffs->server_addr,
+					(struct sockaddr *)&addr,
 					&sock_len)) == -1) {
 			perror("recvfrom firts packet");
 			continue;
@@ -422,18 +435,17 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 			return ERROR;
 		}
 		if (stuffs->server_addr->sin_addr.s_addr !=
-				stuffs->client_addr->sin_addr.s_addr) {
+				addr.sin_addr.s_addr) {
 			PR_DEBUG("packet was received from wrong address: %s\n",
 					inet_ntoa(stuffs->
 						server_addr->sin_addr));
 			PR_DEBUG("valid address is: %s\n",
-					inet_ntoa(stuffs->
-						client_addr->sin_addr));
+					inet_ntoa(addr.sin_addr));
 			continue;
 		}
-		cksum = ntohs(stuffs->recv_pkt->hdr.checksum);
+		cksum = stuffs->recv_pkt->hdr.checksum;
 		stuffs->recv_pkt->hdr.checksum = 0;
-		if (cksum != in_cksum((uint16_t *)&stuffs->recv_pkt,
+		if (cksum != in_cksum((uint16_t *)stuffs->recv_pkt,
 				nr)) {
 			PR_DEBUG("wrong checksum in incoming packet\n");
 			continue;
@@ -486,8 +498,8 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 		memcpy((void *)pkt_p->data,
 				(const void *)(buf + send_cnt), PAYLOAD_SIZE);
 		pkt_p->hdr.checksum = 0;
-		pkt_p->hdr.checksum = htons(in_cksum((uint16_t *)pkt_p,
-					sizeof(struct pkt)));
+		pkt_p->hdr.checksum = in_cksum((uint16_t *)pkt_p,
+					sizeof(struct pkt));
 
 		if (send_icmp(net_fd, pkt_p, &addr, &tot) == ERROR) {
 			if (send_cnt == 0) {
@@ -516,9 +528,9 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 		pkt_p->hdr.checksum = 0;
 		memcpy((void *)pkt_p->data,
 				(const void *)(buf + send_cnt), rem);
-		pkt_p->hdr.checksum = htons(in_cksum((uint16_t *)pkt_p,
+		pkt_p->hdr.checksum = in_cksum((uint16_t *)pkt_p,
 					sizeof(struct pkt)
-					- (PAYLOAD_SIZE - rem)));
+					- (PAYLOAD_SIZE - rem));
 
 		rem += PKT_STUFF_SIZE;
 		if (send_icmp(net_fd, pkt_p, &addr, &rem) == ERROR) {
@@ -559,7 +571,7 @@ RC_t recieve_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 					inet_ntoa(client_addr->sin_addr));
 			continue;
 		}
-		cksum = ntohs(pkt_p->hdr.checksum);
+		cksum = pkt_p->hdr.checksum;
 		pkt_p->hdr.checksum = 0;
 		if (cksum != in_cksum((uint16_t *)pkt_p, nr)) {
 			PR_DEBUG("wrong checksum in incoming packet\n");
@@ -615,7 +627,7 @@ RC_t recieve_from_server(int net_fd, IcmpStuff_t * stuffs)
 					inet_ntoa(s_addr->sin_addr));
 			continue;
 		}
-		cksum = ntohs(pkt_p->hdr.checksum);
+		cksum = pkt_p->hdr.checksum;
 		pkt_p->hdr.checksum = 0;
 		if (cksum != in_cksum((uint16_t *)pkt_p, nr)) {
 			PR_DEBUG("wrong checksum in incoming packet\n");
@@ -666,8 +678,8 @@ RC_t send_to_server(int net_fd, IcmpStuff_t * stuffs)
 		memcpy((void *)pkt_p->data,
 				(const void *)(buf + send_cnt), PAYLOAD_SIZE);
 		pkt_p->hdr.checksum = 0;
-		pkt_p->hdr.checksum = htons(in_cksum((uint16_t *)pkt_p,
-					sizeof(struct pkt)));
+		pkt_p->hdr.checksum = in_cksum((uint16_t *)pkt_p,
+					sizeof(struct pkt));
 
 		if (send_icmp(net_fd, pkt_p, addr, &tot) == ERROR)
 			return ERROR;
@@ -679,9 +691,9 @@ RC_t send_to_server(int net_fd, IcmpStuff_t * stuffs)
 		pkt_p->hdr.checksum = 0;
 		memcpy((void *)pkt_p->data, (const void *)(buf + send_cnt),
 				rem);
-		pkt_p->hdr.checksum = htons(in_cksum((uint16_t *)pkt_p,
+		pkt_p->hdr.checksum = in_cksum((uint16_t *)pkt_p,
 					sizeof(struct pkt)
-					- (PAYLOAD_SIZE - rem)));
+					- (PAYLOAD_SIZE - rem));
 
 		rem += PKT_STUFF_SIZE;
 		if (send_icmp(net_fd, pkt_p, addr, &rem) == ERROR) {
@@ -699,17 +711,20 @@ RC_t send_icmp(int net_fd, struct pkt * send_pkt, struct sockaddr_in * addr,
 	/* pkt_size is payload size (include icmphdr and PKT_STUFF_SIZE) */
 {
 	int send_cnt, attempt;
+	PR_DEBUG("%s, pkt_size: %i\n", __func__, *pkt_size);
 	for (attempt = ATTEMPT_CNT;;) {
 		if ((send_cnt = sendto(net_fd, send_pkt, *pkt_size,
 						0, (struct sockaddr *)addr,
 						sizeof(struct sockaddr_in)))
 				== -1) {
+			perror("sendto");
 			if (--attempt >= 0) {
 				continue;
 			} else {
 				return ERROR;
 			}
 		}
+		PR_DEBUG("%s, pkt_size: %i\n", __func__, *pkt_size);
 		*pkt_size = send_cnt;
 		return SUCCESS;
 	}
