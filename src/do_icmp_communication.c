@@ -374,17 +374,16 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 
 RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 {
+	struct timeval tv, optval;
 	socklen_t sock_len = sizeof(struct sockaddr),
-		  setsockopt_len = sizeof(int);
-	struct timeval tv;
+		  setsockopt_len = sizeof(optval);
 	double integer;
-	int level = 0, optname = 0, optval = 0;
 	uint32_t i, pkt_size = sizeof(struct pkt) - PKT_STUFF_SIZE;
 	ssize_t nr;
 	uint16_t cksum, seq;
 	tv.tv_usec = modf(stuffs->rto, &integer) * 1000000;
 	tv.tv_sec = integer;
-	if (getsockopt(net_fd, level, optname, &optval,
+	if (getsockopt(net_fd, SOL_SOCKET, SO_RCVTIMEO, &optval,
 				&setsockopt_len) == -1) {
 		perror("getsockopt");
 		return ERROR;
@@ -397,13 +396,14 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 		stuffs->send_pkt->hdr.checksum = 0;
 		stuffs->send_pkt->hdr.checksum = htons(in_cksum((uint16_t *)
 					&stuffs->send_pkt,
-					sizeof(struct pkt) - PAYLOAD_SIZE));
+					(sizeof(struct pkt) - PAYLOAD_SIZE)));
 		if (send_icmp(net_fd, stuffs->send_pkt, stuffs->client_addr,
 					&pkt_size) == ERROR) {
 			fprintf(stderr, "send first packet error\n");
 			return ERROR;
 		}
-		if (setsockopt(net_fd, level, SO_RCVTIMEO, (const void *)&tv,
+		if (setsockopt(net_fd, SOL_SOCKET, SO_RCVTIMEO,
+					(const void *)&tv,
 					sizeof(tv)) == -1) {
 			perror("setsockopt");
 			return ERROR;
@@ -416,7 +416,7 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 			perror("recvfrom firts packet");
 			continue;
 		}
-		if (setsockopt(net_fd, level, optname, &optval,
+		if (setsockopt(net_fd, SOL_SOCKET, SO_RCVTIMEO, &optval,
 					setsockopt_len) == -1) {
 			perror("setsockopt");
 			return ERROR;

@@ -17,14 +17,14 @@
 			+ sizeof(struct iphdr) \
 			+ sizeof(struct icmphdr) \
 			+ sizeof(uint32_t) \
-			+ sizeof(uint16_t) * 2 \
-			+ sizeof(bool) * 4))
+			+ (sizeof(uint16_t) * 2) \
+			+ (sizeof(bool) * 4)))
 
 struct pkt {
 	struct icmphdr hdr;
+	uint32_t ack_num;
 	uint16_t len; /* len of PAYLOAD_SIZE */
 	uint16_t cwnd;
-	uint32_t ack_num;
 	bool need_icmp_fl, need_ack, hangup, first_packet;
 	uint8_t data[PAYLOAD_SIZE];
 } __attribute__((packed));
