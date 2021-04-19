@@ -1,6 +1,4 @@
-#include <stdio.h>
 #include <unistd.h>
-#include <stdlib.h>
 #include <stdbool.h>
 
 #include <getopt.h>
@@ -11,9 +9,8 @@
 
 #include <string.h>
 
-#include <errno.h>
-
 #include <main.h>
+#include <communication_routines.h>
 
 RC_t parsing_cmd(int argc, char **argv, CMD_t ** args);
 RC_t get_ipaddr(char *ip_str, struct in_addr *ip_addr);
@@ -64,11 +61,20 @@ int main(int argc, char **argv)
 	    ("Now you can setup ip address for tun"
 	     "interface and tune routing tables\n");
 
-	if (do_icmp_communication(fds, args) < SUCCESS) {
-		free_stuff(&args, &fds);
-		exit(EXIT_FAILURE);
+	if (args->role == CLIENT) {
+		if (do_client_communication(fds, args) != SUCCESS) {
+			free_stuff(&args, &fds);
+			exit(EXIT_FAILURE);
+		}
+	} else {
+		if (do_server_communication(fds, args) != SUCCESS) {
+			free_stuff(&args, &fds);
+			exit(EXIT_FAILURE);
+		}
 	}
 
+
+	close(fds->net_fd);
 	close(fds->tun_fd);
 	free_stuff(&args, &fds);
 	fprintf(stderr, "good luck\n");

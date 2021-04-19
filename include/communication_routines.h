@@ -1,5 +1,5 @@
-#ifndef DI_ICMP_COMMUNICATION_H
-#define DO_ICMP_COMMUNICATION_H 1
+#ifndef COMMUNICATION_ROUTINES_H
+#define COMMUNICATION_ROUTINES_H 1
 
 #include <main.h>
 #include <ring_buffer.h>
@@ -41,12 +41,26 @@ typedef struct {
 	struct pkt *send_pkt, *recv_pkt;
 } IcmpStuff_t;
 
+#define ATTEMPT_CNT 3
 #define INITIAL_CWND_SIZE 2
 #define INITIAL_RTO 3.5
 #define MAX_CWND_SIZE 2
 #define BUF_SIZE (PAYLOAD_SIZE * MAX_CWND_SIZE)
 #define PKT_STUFF_SIZE (sizeof(struct pkt) - PAYLOAD_SIZE)
 
+RC_t do_client_communication(NetFD_t * fds, CMD_t * args);
+
+RC_t do_server_communication(NetFD_t * fds, CMD_t * args);
+
+RC_t send_icmp(int net_fd, struct pkt * send_pkt, struct sockaddr_in * addr,
+		uint32_t * pkt_size);
+
 uint16_t in_cksum(uint16_t * addr, size_t len);
 
-#endif /* DO_ICMP_COMMUNICATION_H */
+void free_icmp_stuffs(IcmpStuff_t * stuffs);
+
+RC_t write_all(int fd, void *buf, int32_t n, int32_t * tot_write);
+
+RC_t read_all(int fd, void *buf, int32_t n, int32_t * tot_read);
+
+#endif

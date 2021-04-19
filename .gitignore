@@ -9,3 +9,6 @@ icmp-tunnel
 example.c
 example/*
 core
+Doxyfile
+doxygen-doc/*
+doxygen-doc
