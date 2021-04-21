@@ -38,7 +38,8 @@ typedef struct {
 	uint8_t *buffer;
 	RingBuf_t *rb;
 	struct sockaddr_in *client_addr, *server_addr;
-	struct pkt *send_pkt, *recv_pkt;
+	struct pkt *send_pkt;
+	void *recv_pkt;
 } IcmpStuff_t;
 
 #define ATTEMPT_CNT 3

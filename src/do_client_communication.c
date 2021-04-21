@@ -8,10 +8,10 @@
 
 #include <communication_routines.h>
 #include <ring_buffer.h>
-
+/*
 RC_t send_to_server(int net_fd, IcmpStuff_t * stuffs)
 {
-	/* i is the number of integral "PAYLOAD_SIZE" units */
+	// i is the number of integral "PAYLOAD_SIZE" units
 	int buf_len = stuffs->nr;
 	uint32_t i = (buf_len / PAYLOAD_SIZE), tot = sizeof(struct pkt), n;
 	int send_cnt;
@@ -55,13 +55,10 @@ RC_t send_to_server(int net_fd, IcmpStuff_t * stuffs)
 	stuffs->seq = seq;
 	stuffs->nw = send_cnt;
 	return SUCCESS;
-}
-
+}*/
+/*
 RC_t recieve_from_server(int net_fd, IcmpStuff_t * stuffs)
 {
-	/* I need to check the old sequence number and the last received,
-	 * if the numbers match, then there is nothing more to read
-	 */
 	socklen_t addr_len = sizeof(struct sockaddr);
 	uint16_t old_seq = stuffs->old_seq;
 	uint16_t pkt_id = stuffs->pkt_id, cksum;
@@ -120,16 +117,16 @@ RC_t recieve_from_server(int net_fd, IcmpStuff_t * stuffs)
 	stuffs->nr = tot;
 	return SUCCESS;
 }
-
+*/
 RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
-	/*client*/
 {
 	struct sockaddr_in addr;
 	struct timeval tv, optval;
 	socklen_t sock_len = sizeof(struct sockaddr),
 		  setsockopt_len = sizeof(optval);
 	double integer;
-	uint32_t i, pkt_size = (sizeof(struct pkt) - PAYLOAD_SIZE);
+	uint32_t i, pkt_size = (sizeof(struct pkt) - PAYLOAD_SIZE),
+		 iphdrlen, icmplen;
 	ssize_t nr;
 	uint16_t cksum, seq;
 	PR_DEBUG("size of packet: %iu\n", pkt_size);
@@ -160,8 +157,7 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 			return ERROR;
 		}
 		if ((nr = recvfrom(net_fd, stuffs->recv_pkt,
-					sizeof(struct pkt) -
-					PAYLOAD_SIZE, MSG_WAITALL,
+					IP_MAXPACKET, MSG_WAITALL,
 					(struct sockaddr *)&addr,
 					&sock_len)) == -1) {
 			perror("recvfrom firts packet from server");
@@ -181,24 +177,53 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 					inet_ntoa(addr.sin_addr));
 			continue;
 		}
-		cksum = stuffs->recv_pkt->hdr.checksum;
-		stuffs->recv_pkt->hdr.checksum = 0;
+		iphdrlen = ((struct iphdr *)stuffs->recv_pkt)->ihl *
+			sizeof(int);
+		icmplen = ntohs(((struct iphdr *)stuffs->recv_pkt)->tot_len) -
+			iphdrlen;
+		/* get check sum of ip header */
+		cksum = ((struct iphdr *)stuffs->recv_pkt)->check;
+		((struct iphdr *)stuffs->recv_pkt)->check = 0;
 		if (cksum != in_cksum((uint16_t *)stuffs->recv_pkt,
-				nr)) {
-			PR_DEBUG("wrong checksum in incoming packet\n");
+				iphdrlen)) {
+			fprintf(stderr, "wrong checksum in ip header 0X%X, "
+					"check sum is: 0X%X\n",
+					in_cksum((uint16_t *)stuffs->recv_pkt,
+					iphdrlen), cksum);
+			continue;
+		}
+		/* get check sum of icmp header */
+		cksum = ((struct icmphdr *)stuffs->recv_pkt +
+				iphdrlen)->checksum;
+		((struct icmphdr *)stuffs->recv_pkt + iphdrlen)->checksum = 0;
+		if (cksum != in_cksum(((uint16_t *)stuffs->
+						recv_pkt + iphdrlen),
+						icmplen)) {
+			fprintf(stderr, "check sum of icmp packet 0X%X, "
+					"check sum is: 0X%X\n",
+					in_cksum(((uint16_t *)stuffs->
+							recv_pkt + iphdrlen),
+						icmplen), cksum);
 			continue;
 		}
 		PR_DEBUG("first packet size is %zu should be %zu\n",
 				nr,
-				(sizeof(struct pkt) - PAYLOAD_SIZE));
-		if (stuffs->recv_pkt->first_packet != true) {
+				(sizeof(struct pkt) - PAYLOAD_SIZE +
+				 sizeof(struct iphdr)));
+		if (((struct pkt *)stuffs->recv_pkt + iphdrlen)->
+				first_packet != true) {
 			PR_DEBUG("first packet is not \"first packet\"\n");
+			PR_DEBUG("\"first_packet\" field value is: 0X%X\n",
+					((struct pkt *)stuffs->recv_pkt +
+					 iphdrlen)->first_packet);
 			continue;
 		}
-		if (seq != ntohs(stuffs->recv_pkt->hdr.un.echo.sequence)) {
+		if (seq != ntohs(((struct pkt *)stuffs->recv_pkt + iphdrlen)->
+					hdr.un.echo.sequence)) {
 			PR_DEBUG("sequence %hu is not a valid sequence %hu\n",
-					ntohs(stuffs->
-						recv_pkt->hdr.un.echo.sequence),
+					ntohs(((struct pkt *)stuffs->
+						recv_pkt + iphdrlen)->
+						hdr.un.echo.sequence),
 					seq);
 		}
 
@@ -245,7 +270,7 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 		return ERROR;
 	}
 	send_pkt = stuffs->send_pkt;
-	stuffs->recv_pkt = malloc(sizeof(struct pkt));
+	stuffs->recv_pkt = malloc(IP_MAXPACKET);
 	if (stuffs->recv_pkt == NULL) {
 		perror("malloc recv_pkt");
 		free_icmp_stuffs(stuffs);
@@ -282,7 +307,7 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 	PR_DEBUG("handshake is happened\n");
 	free_icmp_stuffs(stuffs);
 	return SUCCESS;
-
+/*
 	sel_to.tv_sec = 1;
 	sel_to.tv_usec = 0;
 
@@ -301,7 +326,6 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 		}
 
 		if (FD_ISSET(tun_fd, &rfds) == true) {
-			/* read from tun_fd */
 			if (read_all(tun_fd, &stuffs->buffer, BUF_SIZE,
 						&stuffs->nr) == ERROR) {
 				if (stuffs->nr == 0) {
@@ -309,7 +333,6 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 					break;
 				}
 			}
-			/* send icmp packets */
 			stuffs->old_seq = stuffs->seq;
 			if (send_to_server(net_fd, stuffs) == ERROR) {
 				if (stuffs->nw == 0) {
@@ -318,14 +341,12 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 				}
 			}
 		} else if (FD_ISSET(net_fd, &rfds) == true) {
-			/* recieve icmp packets */
 			if (recieve_from_server(net_fd, stuffs) == ERROR) {
 				if (stuffs->nr == 0) {
 					err_fl = true;
 					break;
 				}
 			}
-			/* write to tun_fd */
 			if (write_all(tun_fd, stuffs->buffer, stuffs->nr,
 						&stuffs->nw) == ERROR) {
 				if (stuffs->nw == 0) {
@@ -334,7 +355,6 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 				}
 			}
 		} else {
-			/* idle, if no data */
 			if (stuffs->need_icmp == true) {
 				sel_to.tv_sec = 0;
 				sel_to.tv_usec = 0;
@@ -353,10 +373,9 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 			send_icmp(net_fd, send_pkt, stuffs->server_addr,
 					&pkt_size);
 		}
-	}			/*for (;;) */
-
+	}
+*/
 	free_icmp_stuffs(stuffs);
-	/*free(cwnd_buf);*/
 	if (err_fl == true)
 		return ERROR;
 	else
