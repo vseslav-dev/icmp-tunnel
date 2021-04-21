@@ -1,5 +1,6 @@
 cscope.files
 cscope.out
+cscope*
 *.swp
 ./src/*.o
 ./src/*.d

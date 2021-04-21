@@ -8,7 +8,6 @@ RC_t send_icmp(int net_fd, struct pkt * send_pkt, struct sockaddr_in * addr,
 	/* pkt_size is payload size (include icmphdr and PKT_STUFF_SIZE) */
 {
 	int send_cnt, attempt;
-	PR_DEBUG("%s, pkt_size: %i\n", __func__, *pkt_size);
 	for (attempt = ATTEMPT_CNT;;) {
 		if ((send_cnt = sendto(net_fd, send_pkt, *pkt_size,
 						0, (struct sockaddr *)addr,
@@ -21,7 +20,8 @@ RC_t send_icmp(int net_fd, struct pkt * send_pkt, struct sockaddr_in * addr,
 				return ERROR;
 			}
 		}
-		PR_DEBUG("%s, pkt_size: %i\n", __func__, *pkt_size);
+		PR_DEBUG("%s, pkt_size: %i, attempt %i\n", __func__,
+				*pkt_size, attempt);
 		*pkt_size = send_cnt;
 		return SUCCESS;
 	}

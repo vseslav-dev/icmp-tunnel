@@ -193,16 +193,18 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 			continue;
 		}
 		/* get check sum of icmp header */
-		cksum = ((struct icmphdr *)stuffs->recv_pkt +
-				iphdrlen)->checksum;
-		((struct icmphdr *)stuffs->recv_pkt + iphdrlen)->checksum = 0;
-		if (cksum != in_cksum(((uint16_t *)stuffs->
-						recv_pkt + iphdrlen),
+		cksum = ((struct icmphdr *)((uint8_t *)stuffs->recv_pkt +
+				iphdrlen))->checksum;
+		((struct icmphdr *)((uint8_t *)stuffs->recv_pkt + iphdrlen))->
+			checksum = 0;
+		if (cksum != in_cksum(((uint16_t *)((uint8_t *)stuffs->
+						recv_pkt + iphdrlen)),
 						icmplen)) {
 			fprintf(stderr, "check sum of icmp packet 0X%X, "
 					"check sum is: 0X%X\n",
-					in_cksum(((uint16_t *)stuffs->
-							recv_pkt + iphdrlen),
+					in_cksum(((uint16_t *)
+							((uint8_t *)stuffs->
+							recv_pkt + iphdrlen)),
 						icmplen), cksum);
 			continue;
 		}
@@ -210,19 +212,22 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 				nr,
 				(sizeof(struct pkt) - PAYLOAD_SIZE +
 				 sizeof(struct iphdr)));
-		if (((struct pkt *)stuffs->recv_pkt + iphdrlen)->
+		if (((struct pkt *)((uint8_t *)stuffs->recv_pkt + iphdrlen))->
 				first_packet != true) {
 			PR_DEBUG("first packet is not \"first packet\"\n");
 			PR_DEBUG("\"first_packet\" field value is: 0X%X\n",
-					((struct pkt *)stuffs->recv_pkt +
-					 iphdrlen)->first_packet);
+					((struct pkt *)
+					 ((uint8_t *)stuffs->recv_pkt +
+					 iphdrlen))->first_packet);
 			continue;
 		}
-		if (seq != ntohs(((struct pkt *)stuffs->recv_pkt + iphdrlen)->
+		if (seq != ntohs(((struct pkt *)((uint8_t *)stuffs->recv_pkt +
+						iphdrlen))->
 					hdr.un.echo.sequence)) {
 			PR_DEBUG("sequence %hu is not a valid sequence %hu\n",
-					ntohs(((struct pkt *)stuffs->
-						recv_pkt + iphdrlen)->
+					ntohs(((struct pkt *)
+							((uint8_t *)stuffs->
+						recv_pkt + iphdrlen))->
 						hdr.un.echo.sequence),
 					seq);
 		}
