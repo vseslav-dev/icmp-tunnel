@@ -139,7 +139,7 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 	uint32_t i, pkt_size = sizeof(struct pkt) - PAYLOAD_SIZE,
 		 iphdrlen, icmplen;
 	ssize_t nr;
-	uint16_t cksum;
+	uint16_t cksum, changed_id;
 	for (i = 0; i < ATTEMPT_CNT; i++) {
 		PR_DEBUG("recvfrom starts\n");
 		if ((nr = recvfrom(net_fd, stuffs->recv_pkt,
@@ -203,16 +203,19 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 			continue;
 		}
 		if (ntohs(((struct pkt *)((uint8_t *)stuffs->recv_pkt +
-						iphdrlen))->hdr.un.echo.id) !=
-			stuffs->pkt_id) {
-			fprintf(stderr, "session id is %hu, should be %hu\n",
+							iphdrlen))->
+					session_id) != stuffs->pkt_id) {
+			fprintf(stderr, "received packet has wrong session id: "
+					"%hu, walid session id: %hu\n",
 					ntohs(((struct pkt *)
 							((uint8_t *)stuffs->
-							recv_pkt + iphdrlen))->
-						hdr.un.echo.id),
-					stuffs->pkt_id);
+							 recv_pkt + iphdrlen))->
+						session_id), stuffs->pkt_id);
 			continue;
 		}
+		changed_id = ntohs(((struct pkt *)((uint8_t *)stuffs->recv_pkt +
+						iphdrlen))->hdr.un.echo.id);
+		PR_DEBUG("changed id: %hu\n", changed_id);
 
 		stuffs->seq
 			= ntohs(((struct pkt *)((uint8_t *)stuffs->recv_pkt +
@@ -220,6 +223,7 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 					hdr.un.echo.sequence);
 		PR_DEBUG("sequence is: %hu\n", stuffs->seq);
 		PR_DEBUG("session-id is: %hu\n", stuffs->pkt_id);
+		stuffs->send_pkt->hdr.un.echo.id = htons(changed_id);
 		stuffs->send_pkt->hdr.un.echo.sequence = htons(stuffs->seq);
 		stuffs->send_pkt->first_packet = true;
 		stuffs->send_pkt->len = 0;
@@ -278,8 +282,8 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 	}
 	stuffs->send_pkt->hdr.type = ICMP_ECHOREPLY;
 	stuffs->send_pkt->hdr.code = 0;
-	stuffs->send_pkt->hdr.un.echo.id = htons(args->session_id);
 	stuffs->pkt_id = args->session_id;
+	stuffs->send_pkt->session_id = htons(stuffs->pkt_id);
 
 	stuffs->client_addr->sin_family = AF_INET;
 	stuffs->client_addr->sin_port = 0;

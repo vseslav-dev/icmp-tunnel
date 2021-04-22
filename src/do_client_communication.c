@@ -172,10 +172,10 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 		if (stuffs->server_addr->sin_addr.s_addr !=
 				addr.sin_addr.s_addr) {
 			PR_DEBUG("packet was received from wrong address: %s\n",
+					inet_ntoa(addr.sin_addr));
+			PR_DEBUG("valid address is: %s\n",
 					inet_ntoa(stuffs->
 						server_addr->sin_addr));
-			PR_DEBUG("valid address is: %s\n",
-					inet_ntoa(addr.sin_addr));
 			continue;
 		}
 		iphdrlen = ((struct iphdr *)stuffs->recv_pkt)->ihl *
@@ -220,6 +220,29 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 					((struct pkt *)
 					 ((uint8_t *)stuffs->recv_pkt +
 					 iphdrlen))->first_packet);
+			continue;
+		}
+		if (ntohs(((struct pkt *)((uint8_t *)stuffs->recv_pkt +
+							iphdrlen))->
+					hdr.un.echo.id) != stuffs->pkt_id) {
+			fprintf(stderr, "hdr.un.echo.id has wrong id: %hu, "
+					"walid id: %hu\n",
+					ntohs(((struct pkt *)
+					 ((uint8_t *)stuffs->recv_pkt +
+					  iphdrlen))->hdr.un.echo.id),
+					stuffs->pkt_id);
+			continue;
+		}
+
+		if (ntohs(((struct pkt *)((uint8_t *)stuffs->recv_pkt +
+							iphdrlen))->
+					session_id) != stuffs->pkt_id) {
+			fprintf(stderr, "received packet has wrong session id: "
+					"%hu, walid session id: %hu\n",
+					ntohs(((struct pkt *)
+					((uint8_t *)stuffs->recv_pkt +
+					iphdrlen))->session_id),
+					stuffs->pkt_id);
 			continue;
 		}
 		if (seq != ntohs(((struct pkt *)((uint8_t *)stuffs->recv_pkt +
@@ -288,8 +311,10 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 		err_fl = true;
 	} */
 
+	stuffs->rto = INITIAL_RTO;
 	stuffs->pkt_id = args->session_id;
 	stuffs->send_pkt->hdr.un.echo.id = htons(stuffs->pkt_id);
+	stuffs->send_pkt->session_id = htons(stuffs->pkt_id);
 	PR_DEBUG("ICMP_ECHO is: %d\n", ICMP_ECHO);
 	stuffs->send_pkt->hdr.type = ICMP_ECHO;
 	stuffs->send_pkt->hdr.code = ICMP_ECHOREPLY;
