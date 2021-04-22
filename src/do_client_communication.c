@@ -120,6 +120,7 @@ RC_t recieve_from_server(int net_fd, IcmpStuff_t * stuffs)
 */
 RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 {
+	bool complete = false;
 	struct sockaddr_in addr;
 	struct timeval tv, optval;
 	socklen_t sock_len = sizeof(struct sockaddr),
@@ -137,7 +138,7 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 		perror("getsockopt");
 		return ERROR;
 	}
-	for (i = 0; i < ATTEMPT_CNT; i++) {
+	for (i = 0; i < ATTEMPT_CNT && !complete; i++) {
 		seq = stuffs->seq;
 		stuffs->send_pkt->hdr.un.echo.sequence = htons(stuffs->seq++);
 		stuffs->send_pkt->len = 0;
@@ -255,9 +256,12 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 						hdr.un.echo.sequence),
 					seq);
 		}
-
+		complete = true;
 	}
-	return SUCCESS;
+	if (i < ATTEMPT_CNT)
+		return SUCCESS;
+	else
+		return ERROR;
 }
 
 RC_t do_client_communication(NetFD_t * fds, CMD_t * args)

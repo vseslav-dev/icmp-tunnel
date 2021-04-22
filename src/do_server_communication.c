@@ -135,12 +135,13 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 
 RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 {
+	bool complete = false;
 	socklen_t sock_len = sizeof(struct sockaddr);
 	uint32_t i, pkt_size = sizeof(struct pkt) - PAYLOAD_SIZE,
 		 iphdrlen, icmplen;
 	ssize_t nr;
 	uint16_t cksum, changed_id;
-	for (i = 0; i < ATTEMPT_CNT; i++) {
+	for (i = 0; i < ATTEMPT_CNT && !complete; i++) {
 		PR_DEBUG("recvfrom starts\n");
 		if ((nr = recvfrom(net_fd, stuffs->recv_pkt,
 					IP_MAXPACKET, MSG_WAITALL,
@@ -238,8 +239,12 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 			fprintf(stderr, "cannot send answer to first packet\n");
 			return ERROR;
 		}
+		complete = true;
 	}
-	return SUCCESS;
+	if (i < ATTEMPT_CNT)
+		return SUCCESS;
+	else
+		return ERROR;
 }
 
 RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
