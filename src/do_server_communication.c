@@ -207,7 +207,7 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 			stuffs->pkt_id) {
 			fprintf(stderr, "session id is %hu, should be %hu\n",
 					ntohs(((struct pkt *)
-							((uint8_t)stuffs->
+							((uint8_t *)stuffs->
 							recv_pkt + iphdrlen))->
 						hdr.un.echo.id),
 					stuffs->pkt_id);
@@ -278,6 +278,7 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 	}
 	stuffs->send_pkt->hdr.type = ICMP_ECHOREPLY;
 	stuffs->send_pkt->hdr.code = 0;
+	stuffs->send_pkt->hdr.un.echo.id = htons(args->session_id);
 	stuffs->pkt_id = args->session_id;
 
 	stuffs->client_addr->sin_family = AF_INET;

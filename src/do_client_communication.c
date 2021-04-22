@@ -163,6 +163,7 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 			perror("recvfrom firts packet from server");
 			continue;
 		}
+		PR_DEBUG("recvfrom success, size: %zu\n", nr);
 		if (setsockopt(net_fd, SOL_SOCKET, SO_RCVTIMEO, &optval,
 					setsockopt_len) == -1) {
 			perror("setsockopt");
