@@ -8,7 +8,7 @@
 
 #include <communication_routines.h>
 #include <ring_buffer.h>
-/*
+
 RC_t send_to_server(int net_fd, IcmpStuff_t * stuffs)
 {
 	// i is the number of integral "PAYLOAD_SIZE" units
@@ -55,8 +55,8 @@ RC_t send_to_server(int net_fd, IcmpStuff_t * stuffs)
 	stuffs->seq = seq;
 	stuffs->nw = send_cnt;
 	return SUCCESS;
-}*/
-/*
+}
+
 RC_t recieve_from_server(int net_fd, IcmpStuff_t * stuffs)
 {
 	socklen_t addr_len = sizeof(struct sockaddr);
@@ -117,7 +117,7 @@ RC_t recieve_from_server(int net_fd, IcmpStuff_t * stuffs)
 	stuffs->nr = tot;
 	return SUCCESS;
 }
-*/
+
 RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 {
 	bool complete = false;
@@ -130,7 +130,6 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 		 iphdrlen, icmplen;
 	ssize_t nr;
 	uint16_t cksum, seq;
-	PR_DEBUG("size of packet: %iu\n", pkt_size);
 	tv.tv_usec = modf(stuffs->rto, &integer) * 1000000;
 	tv.tv_sec = integer;
 	if (getsockopt(net_fd, SOL_SOCKET, SO_RCVTIMEO, &optval,
@@ -319,7 +318,6 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 	stuffs->pkt_id = args->session_id;
 	stuffs->send_pkt->hdr.un.echo.id = htons(stuffs->pkt_id);
 	stuffs->send_pkt->session_id = htons(stuffs->pkt_id);
-	PR_DEBUG("ICMP_ECHO is: %d\n", ICMP_ECHO);
 	stuffs->send_pkt->hdr.type = ICMP_ECHO;
 	stuffs->send_pkt->hdr.code = ICMP_ECHOREPLY;
 
@@ -327,12 +325,8 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 	stuffs->server_addr->sin_port = 0;
 	stuffs->server_addr->sin_addr = args->ip_addr.remote_ip;
 
-	PR_DEBUG("len of pkt: %zu, len of pkt - PAYLOAD_SIZE: %zu\n",
-			sizeof(struct pkt),
-			(sizeof(struct pkt) - PAYLOAD_SIZE));
-
 	if (send_first_packet(net_fd, stuffs) == ERROR) {
-		fprintf(stderr, "sending the first packet to client "
+		fprintf(stderr, "sending the first packet to server "
 				"returned an error\n");
 
 		free_icmp_stuffs(stuffs);
@@ -340,9 +334,7 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 	}
 
 	PR_DEBUG("handshake is happened\n");
-	free_icmp_stuffs(stuffs);
-	return SUCCESS;
-/*
+
 	sel_to.tv_sec = 1;
 	sel_to.tv_usec = 0;
 
@@ -409,7 +401,6 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 					&pkt_size);
 		}
 	}
-*/
 	free_icmp_stuffs(stuffs);
 	if (err_fl == true)
 		return ERROR;

@@ -57,8 +57,6 @@ void free_icmp_stuffs(IcmpStuff_t * stuffs)
 			free(stuffs->buffer);
 		if (stuffs->rb)
 			rb_del(stuffs->rb);
-		if (stuffs->buffer)
-			free(stuffs->buffer);
 		if (stuffs->client_addr)
 			free(stuffs->client_addr);
 		if (stuffs->server_addr)

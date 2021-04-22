@@ -7,7 +7,7 @@
 
 #include <communication_routines.h>
 #include <ring_buffer.h>
-/*
+
 RC_t recieve_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 {
 	uint16_t cksum, pkt_id = stuffs->pkt_id;
@@ -52,8 +52,8 @@ RC_t recieve_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 		tot += (nr - PKT_STUFF_SIZE);
 	}
 	return SUCCESS;
-}*/
-/*
+}
+
 RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 {
 	struct sockaddr_in addr = *(stuffs->client_addr);
@@ -131,7 +131,7 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 	}
 	stuffs->nw = send_cnt;
 	return SUCCESS;
-}*/
+}
 
 RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 {
@@ -307,10 +307,7 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 	}
 
 	PR_DEBUG("handshake is happened\n");
-	free_icmp_stuffs(stuffs);
-	return SUCCESS;
 
-	/*
 	for (;;) {
 		FD_ZERO(&rfds);
 		FD_SET(net_fd, &rfds);
@@ -366,7 +363,6 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 			continue;
 		}
 	}			// for (;;)
-	*/
 
 	free_icmp_stuffs(stuffs);
 	//free(cwnd_buf);
