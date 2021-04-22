@@ -17,6 +17,7 @@ typedef enum {
 
 typedef struct {
 	uint16_t icmp_sequence;
+	uint16_t id;
 } RBData_t;
 
 typedef struct {

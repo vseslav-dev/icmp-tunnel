@@ -10,64 +10,117 @@
 
 RC_t recieve_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 {
-	uint16_t cksum, pkt_id = stuffs->pkt_id;
-	int nw, nr, tot, i, cwnd = stuffs->cwnd;
 	socklen_t addr_len = sizeof(struct sockaddr);
-	struct sockaddr_in *client_addr = stuffs->client_addr, addr;
-	struct pkt *pkt_p = stuffs->recv_pkt;
+	uint16_t cksum;
+	int32_t nr, nw;
+        uint32_t tot, i, cwnd = (int)stuffs->cwnd;
+	uint32_t iphdrlen, icmplen;
+	void *pkt_p = stuffs->recv_pkt;
+	struct sockaddr_in *c_addr = stuffs->client_addr, addr;
 	RBData_t rbdata;
 	RingBuf_t *rb = stuffs->rb;
-	for (i = 0, tot = 0; i < cwnd; i++) {
-		nr = recvfrom(net_fd, pkt_p, sizeof(struct pkt), 0,
+	for (nr = 0, tot = 0, i = 0; i < cwnd; i++) {
+		nr = recvfrom(net_fd, pkt_p, IP_MAXPACKET, 0,
 				(struct sockaddr *)&addr, &addr_len);
 		if (nr == -1) {
-			perror("recvfrom");
-			continue;
+			if (tot > 0) {
+				stuffs->nr = tot;
+				return SUCCESS;
+			} else {
+				return ERROR;
+			}
 		}
-		if (addr.sin_addr.s_addr != client_addr->sin_addr.s_addr) {
+		if (addr.sin_addr.s_addr != c_addr->sin_addr.s_addr) {
 			PR_DEBUG("packet was received from wrong address: %s\n",
 					inet_ntoa(addr.sin_addr));
 			PR_DEBUG("valid address is: %s\n",
-					inet_ntoa(client_addr->sin_addr));
+					inet_ntoa(c_addr->sin_addr));
 			continue;
 		}
-		cksum = pkt_p->hdr.checksum;
-		pkt_p->hdr.checksum = 0;
-		if (cksum != in_cksum((uint16_t *)pkt_p, nr)) {
-			PR_DEBUG("wrong checksum in incoming packet\n");
+		//get iphdr len and icmp len
+		iphdrlen = ((struct iphdr *)pkt_p)->ihl * sizeof(int);
+		PR_DEBUG("size of iphdr: %u\n", iphdrlen);
+		icmplen = ntohs(((struct iphdr *)pkt_p)->tot_len) - iphdrlen;
+		PR_DEBUG("size of icmp: %u\n", icmplen);
+
+		//get check sum of ip header
+		cksum = ((struct iphdr *)pkt_p)->check;
+		((struct iphdr *)pkt_p)->check = 0;
+		if (cksum != in_cksum((uint16_t *)pkt_p, iphdrlen)) {
+			fprintf(stderr, "wrong checksum in ip header 0X%X, "
+					"check sum is: 0X%X\n",
+					in_cksum((uint16_t *)pkt_p, iphdrlen),
+					cksum);
 			continue;
 		}
-		if (ntohs(pkt_p->hdr.un.echo.id) != pkt_id) {
-			PR_DEBUG("wrong packet id: %hu, correct id: %hu\n",
-					ntohs(pkt_p->hdr.un.echo.id), pkt_id);
+
+		//get check sum of icmp header
+		cksum = ((struct icmphdr *)((uint8_t *)pkt_p + iphdrlen))->
+			checksum;
+		((struct icmphdr *)((uint8_t *)pkt_p + iphdrlen))->checksum = 0;
+		if (cksum != in_cksum(((uint16_t *)((uint8_t *)pkt_p +
+							iphdrlen)), icmplen)) {
+			fprintf(stderr, "check sum of icmp packet 0X%X, "
+					"check sum is: 0X%X\n",
+					in_cksum(((uint16_t *)
+							((uint8_t *)pkt_p +
+							 iphdrlen)), icmplen),
+					cksum);
 			continue;
 		}
-		rbdata.icmp_sequence = pkt_p->hdr.un.echo.sequence;
+
+		//check pkt_p->session_id
+		if (ntohs(((struct pkt *)((uint8_t *)pkt_p + iphdrlen))->
+					session_id) != stuffs->pkt_id) {
+			fprintf(stderr, "received packet has wrong session id: "
+					"%hu, walid session id: %hu\n",
+					ntohs(((struct pkt *)
+					((uint8_t *)pkt_p + iphdrlen))->
+						session_id), stuffs->pkt_id);
+			continue;
+		}
+
+		//check hdr.un.echo.sequence
+		rbdata.icmp_sequence = ((struct pkt *)((uint8_t *)pkt_p +
+							iphdrlen))->
+					hdr.un.echo.sequence;
+
+		//check hdr.un.echo.id
+		rbdata.id = ((struct pkt *)((uint8_t *)pkt_p + iphdrlen))->
+				hdr.un.echo.id;
+
 		rb_put(rb, rbdata);
-		if (write_all(tun_fd, pkt_p->data, nr - PKT_STUFF_SIZE,
-					&nw) == ERROR) {
-			PR_DEBUG("error writing to tun\n");
-			;
+		
+		//write data to tun_fd
+		if (write_all(tun_fd, ((struct pkt *)((uint8_t *)pkt_p +
+							iphdrlen))->data, nr -
+					(PKT_STUFF_SIZE + iphdrlen), &nw) ==
+				ERROR) {
+			fprintf(stderr, "write to tun_fd failed. byte count: "
+					"%lu\n", nr - (PKT_STUFF_SIZE +
+						iphdrlen));
+			continue;
 		}
-		tot += (nr - PKT_STUFF_SIZE);
+		if (nr > (int32_t)(PKT_STUFF_SIZE + iphdrlen))
+			tot += (nr - (PKT_STUFF_SIZE + iphdrlen));
 	}
+	stuffs->nw = nw;
+	stuffs->nr = tot;
 	return SUCCESS;
 }
 
 RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 {
-	struct sockaddr_in addr = *(stuffs->client_addr);
-	struct pkt *pkt_p = stuffs->send_pkt;
+	int32_t buf_len = stuffs->nr;
+	uint32_t i = (buf_len / PAYLOAD_SIZE), tot = sizeof(struct pkt), n;
+	uint32_t send_cnt, rem = buf_len % PAYLOAD_SIZE;
+	uint8_t *buf = stuffs->buffer;
 	RingBuf_t *rb = stuffs->rb;
 	RBData_t rbdata;
-	uint8_t *buf = stuffs->buffer;
-	int buf_len = stuffs->nr;
-	int i = (buf_len / PAYLOAD_SIZE), n, send_cnt;
-	unsigned int tot = sizeof(struct pkt);
-	uint16_t cwnd = stuffs->cwnd;
-	uint32_t rem = (buf_len % PAYLOAD_SIZE);
+	struct pkt *pkt_p = stuffs->send_pkt;
+	struct sockaddr_in *addr = stuffs->client_addr;
 	pkt_p->len = htons(PAYLOAD_SIZE);
-	pkt_p->cwnd = htons(cwnd);
+	pkt_p->cwnd = htons(stuffs->cwnd);
 	for (n = 0, send_cnt = 0; n < i; n++) {
 		if (rb_get(rb, &rbdata) != RB_SUCCESS) {
 			PR_DEBUG("ring buffer error or empty\n");
@@ -80,13 +133,14 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 			}
 		}
 		pkt_p->hdr.un.echo.sequence = rbdata.icmp_sequence;
+		pkt_p->hdr.un.echo.id = rbdata.id;
 		memcpy((void *)pkt_p->data,
 				(const void *)(buf + send_cnt), PAYLOAD_SIZE);
 		pkt_p->hdr.checksum = 0;
 		pkt_p->hdr.checksum = in_cksum((uint16_t *)pkt_p,
 					sizeof(struct pkt));
 
-		if (send_icmp(net_fd, pkt_p, &addr, &tot) == ERROR) {
+		if (send_icmp(net_fd, pkt_p, addr, &tot) == ERROR) {
 			if (send_cnt == 0) {
 				stuffs->nw = 0;
 				return ERROR;
@@ -95,7 +149,8 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 				return SUCCESS;
 			}
 		}
-		send_cnt += tot - PKT_STUFF_SIZE;
+		if (tot > PKT_STUFF_SIZE)
+			send_cnt += tot - PKT_STUFF_SIZE;
 	}
 	if (rem != 0) {
 		if (rb_get(rb, &rbdata) != RB_SUCCESS) {
@@ -109,16 +164,17 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 			}
 		}
 		pkt_p->hdr.un.echo.sequence = rbdata.icmp_sequence;
+		pkt_p->hdr.un.echo.id = rbdata.id;
 		pkt_p->len = htons(rem);
 		pkt_p->hdr.checksum = 0;
-		memcpy((void *)pkt_p->data,
-				(const void *)(buf + send_cnt), rem);
+		memcpy((void *)pkt_p->data, (const void *)(buf + send_cnt),
+				rem);
 		pkt_p->hdr.checksum = in_cksum((uint16_t *)pkt_p,
 					sizeof(struct pkt)
 					- (PAYLOAD_SIZE - rem));
 
 		rem += PKT_STUFF_SIZE;
-		if (send_icmp(net_fd, pkt_p, &addr, &rem) == ERROR) {
+		if (send_icmp(net_fd, pkt_p, addr, &rem) == ERROR) {
 			if (send_cnt == 0) {
 				stuffs->nw = 0;
 				return ERROR;
@@ -127,7 +183,8 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 				return SUCCESS;
 			}
 		}
-		send_cnt += (rem - PKT_STUFF_SIZE);
+		if (rem > PKT_STUFF_SIZE)
+			send_cnt += (rem - PKT_STUFF_SIZE);
 	}
 	stuffs->nw = send_cnt;
 	return SUCCESS;
@@ -332,22 +389,13 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 				}
 			}
 			stuffs->need_icmp = true;
-		} else if (FD_ISSET(net_fd, &rfds) == true) {
-			if (recieve_from_client(net_fd, tun_fd, stuffs)
-					== ERROR) {
-				if (stuffs->nr == 0) {
-					err_fl = true;
-					break;
-				}
-			}
-			stuffs->send_pkt->need_icmp_fl = true;
 			if (send_to_client(net_fd, stuffs) == ERROR) {
 				if (stuffs->nw == 0) {
 					err_fl = true;
 					break;
 				}
 			}
-			if (stuffs->tun_nr == stuffs->nw) {
+			if (stuffs->tun_nr <= stuffs->nw) {
 				stuffs->need_icmp = false;
 				sel_to.tv_sec = 1;
 				sel_to.tv_usec = 0;
@@ -357,6 +405,14 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 				sel_to.tv_sec = 0;
 				sel_to.tv_usec = 0;
 				stuffs->send_pkt->need_icmp_fl = true;
+			}
+		} else if (FD_ISSET(net_fd, &rfds) == true) {
+			if (recieve_from_client(net_fd, tun_fd, stuffs)
+					== ERROR) {
+				if (stuffs->nr == 0) {
+					err_fl = true;
+					break;
+				}
 			}
 		} else {
 			// idle, if no data 
