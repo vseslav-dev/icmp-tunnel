@@ -397,13 +397,9 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 			}
 			if (stuffs->tun_nr <= stuffs->nw) {
 				stuffs->need_icmp = false;
-				sel_to.tv_sec = 1;
-				sel_to.tv_usec = 0;
 				stuffs->send_pkt->need_icmp_fl = false;
 			} else {
 				stuffs->need_icmp = true;
-				sel_to.tv_sec = 0;
-				sel_to.tv_usec = 0;
 				stuffs->send_pkt->need_icmp_fl = true;
 			}
 		} else if (FD_ISSET(net_fd, &rfds) == true) {
