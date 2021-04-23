@@ -71,50 +71,29 @@ void free_icmp_stuffs(IcmpStuff_t * stuffs)
 
 RC_t write_all(int fd, void *buf, int32_t n, int32_t * tot_write)
 {
-	/* n is size of buffer, tot_write is the number of bytes write */
-	int32_t tot, c;
-	for (tot = 0; tot < n;) {
-		c = write(fd, (char *)buf + tot, n - tot);
-		if (c == -1 || c == 0) {
-			PR_DEBUG("%s() write() returned %i status\n",
-					__func__, c);
-			if (tot > 0) {
-				*tot_write = tot;
-				return SUCCESS;
-			} else {
-				perror("write write_all");
-				*tot_write = 0;
-				return ERROR;
-			}
-		}
+	int32_t c;
+	c = write(fd, buf, n);
+	if (c == -1 || c == 0) {
+		PR_DEBUG("%s() write() returned %i status\n", __func__, c);
+		return ERROR;
+	} else {
+		*tot_write = c;
 		PR_DEBUG("%s() write %i bytes\n", __func__, c);
-		tot += c;
+		return SUCCESS;
 	}
-	*tot_write = tot;
-	return SUCCESS;
 }
 
 RC_t read_all(int fd, void *buf, int32_t n, int32_t * tot_read)
 {
 	/* n is size of buffer, tot_read is the number of bytes read */
-	int32_t tot, c;
-	for (tot = 0; tot < n;) {
-		c = read(fd, (char *)buf + tot, n - tot);
-		if (c == -1 || c == 0) {
-			PR_DEBUG("%s() read() returned %i status\n",
-					__func__, c);
-			if (tot > 0) {
-				*tot_read = tot;
-				return SUCCESS;
-			} else {
-				perror("read read_all");
-				*tot_read = 0;
-				return ERROR;
-			}
-		}
+	int32_t c;
+	c = read(fd, buf, n);
+	if (c == -1 || c == 0) {
+		PR_DEBUG("%s() read() returned %i status\n", __func__, c);
+		return ERROR;
+	} else {
+		*tot_read = c;
 		PR_DEBUG("%s() read %i bytes\n", __func__, c);
-		tot += c;
+		return SUCCESS;
 	}
-	*tot_read = tot;
-	return SUCCESS;
 }
