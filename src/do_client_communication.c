@@ -105,6 +105,7 @@ RC_t receive_from_server(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 		need_icmp = ((struct pkt *)((uint8_t *)pkt_p + iphdrlen))->
 			need_icmp_fl;
 		//write data to tun_fd
+		PR_DEBUG("write_all()\n");
 		if (write_all(tun_fd, ((struct pkt *)((uint8_t *)pkt_p +
 							iphdrlen))->data, nr -
 					(PKT_STUFF_SIZE + iphdrlen), &nw) ==

@@ -92,6 +92,7 @@ RC_t receive_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 		rb_put(rb, rbdata);
 		
 		//write data to tun_fd
+		PR_DEBUG("write_all()\n");
 		if (write_all(tun_fd, ((struct pkt *)((uint8_t *)pkt_p +
 							iphdrlen))->data, nr -
 					(PKT_STUFF_SIZE + iphdrlen), &nw) ==
