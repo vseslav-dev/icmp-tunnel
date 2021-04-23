@@ -8,7 +8,7 @@
 #include <communication_routines.h>
 #include <ring_buffer.h>
 
-RC_t recieve_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
+RC_t receive_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 {
 	socklen_t addr_len = sizeof(struct sockaddr);
 	uint16_t cksum;
@@ -380,6 +380,7 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 		}
 
 		if (FD_ISSET(tun_fd, &rfds) == true) {
+			PR_DEBUG("read_all()\n");
 			if (read_all(tun_fd, stuffs->buffer,
 						BUF_SIZE, &stuffs->tun_nr)
 					== ERROR) {
@@ -389,6 +390,7 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 				}
 			}
 			stuffs->need_icmp = true;
+			PR_DEBUG("send_to_client()\n");
 			if (send_to_client(net_fd, stuffs) == ERROR) {
 				if (stuffs->nw == 0) {
 					err_fl = true;
@@ -407,7 +409,8 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 				stuffs->send_pkt->need_icmp_fl = true;
 			}
 		} else if (FD_ISSET(net_fd, &rfds) == true) {
-			if (recieve_from_client(net_fd, tun_fd, stuffs)
+			PR_DEBUG("receive_from_client()\n");
+			if (receive_from_client(net_fd, tun_fd, stuffs)
 					== ERROR) {
 				if (stuffs->nr == 0) {
 					err_fl = true;
@@ -415,6 +418,7 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 				}
 			}
 		} else {
+			PR_DEBUG("Idle, no data\n");
 			// idle, if no data 
 			continue;
 		}

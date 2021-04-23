@@ -9,7 +9,7 @@
 #include <communication_routines.h>
 #include <ring_buffer.h>
 
-RC_t recieve_from_server(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
+RC_t receive_from_server(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 {
 	socklen_t addr_len = sizeof(struct sockaddr);
 	uint16_t pkt_id = stuffs->pkt_id, cksum;
@@ -338,7 +338,7 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 	uint32_t pkt_size = PKT_STUFF_SIZE;
 	bool err_fl = false;
 	struct timeval sel_to; /* select() timeout */
-	struct pkt *send_pkt;
+	struct pkt *send_pkt_local;
 	/*uint32_t ack_num = 0;*/
 	IcmpStuff_t *stuffs = calloc(1, sizeof(IcmpStuff_t));
 	if (stuffs == NULL) {
@@ -362,13 +362,13 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 		free_icmp_stuffs(stuffs);
 		return ERROR;
 	}
-	stuffs->send_pkt = calloc(1, sizeof(struct pkt));
+	send_pkt_local = calloc(1, sizeof(struct pkt));
+	stuffs->send_pkt = send_pkt_local;
 	if (stuffs->send_pkt == NULL) {
 		perror("calloc send_pkt");
 		free_icmp_stuffs(stuffs);
 		return ERROR;
 	}
-	send_pkt = stuffs->send_pkt;
 	stuffs->recv_pkt = malloc(IP_MAXPACKET);
 	if (stuffs->recv_pkt == NULL) {
 		perror("malloc recv_pkt");
@@ -420,7 +420,8 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 		}
 
 		if (FD_ISSET(tun_fd, &rfds) == true) {
-			if (read_all(tun_fd, &stuffs->buffer, BUF_SIZE,
+			PR_DEBUG("read_all()\n");
+			if (read_all(tun_fd, stuffs->buffer, BUF_SIZE,
 						&stuffs->nr) == ERROR) {
 				if (stuffs->nr == 0) {
 					err_fl = true;
@@ -428,6 +429,7 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 				}
 			}
 			stuffs->old_seq = stuffs->seq;
+			PR_DEBUG("send_to_server()\n");
 			if (send_to_server(net_fd, stuffs) == ERROR) {
 				if (stuffs->nw == 0) {
 					err_fl = true;
@@ -435,7 +437,8 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 				}
 			}
 		} else if (FD_ISSET(net_fd, &rfds) == true) {
-			if (recieve_from_server(net_fd, tun_fd, stuffs) ==
+			PR_DEBUG("receive_from_server()\n");
+			if (receive_from_server(net_fd, tun_fd, stuffs) ==
 					ERROR) {
 				if (stuffs->nr == 0) {
 					err_fl = true;
@@ -451,14 +454,15 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 				sel_to.tv_sec = 1;
 				sel_to.tv_usec = 0;
 			}
-			send_pkt->hdr.un.echo.sequence = htons(stuffs->seq++);
-			send_pkt->len = 0;
-			send_pkt->cwnd = htons(stuffs->cwnd);
-			send_pkt->hdr.checksum = 0;
-			send_pkt->hdr.checksum
-				= in_cksum((uint16_t *)send_pkt,
+			send_pkt_local->hdr.un.echo.sequence =
+				htons(stuffs->seq++);
+			send_pkt_local->len = 0;
+			send_pkt_local->cwnd = htons(stuffs->cwnd);
+			send_pkt_local->hdr.checksum = 0;
+			send_pkt_local->hdr.checksum
+				= in_cksum((uint16_t *)send_pkt_local,
 							pkt_size);
-			send_icmp(net_fd, send_pkt, stuffs->server_addr,
+			send_icmp(net_fd, send_pkt_local, stuffs->server_addr,
 					&pkt_size);
 		}
 	}
