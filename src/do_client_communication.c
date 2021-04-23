@@ -396,7 +396,6 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 	if (send_first_packet(net_fd, stuffs) == ERROR) {
 		fprintf(stderr, "sending the first packet to server "
 				"returned an error\n");
-
 		free_icmp_stuffs(stuffs);
 		return ERROR;
 	}
@@ -473,4 +472,3 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 	else
 		return SUCCESS;
 }
-

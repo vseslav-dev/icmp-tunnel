@@ -343,19 +343,15 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 		free_icmp_stuffs(stuffs);
 		return ERROR;
 	}
+	stuffs->rto = INITIAL_RTO;
+	stuffs->pkt_id = args->session_id;
 	stuffs->send_pkt->hdr.type = ICMP_ECHOREPLY;
 	stuffs->send_pkt->hdr.code = 0;
-	stuffs->pkt_id = args->session_id;
 	stuffs->send_pkt->session_id = htons(stuffs->pkt_id);
 
 	stuffs->client_addr->sin_family = AF_INET;
 	stuffs->client_addr->sin_port = 0;
 	stuffs->client_addr->sin_addr = args->ip_addr.local_ip;
-
-	stuffs->rto = INITIAL_RTO;
-
-	sel_to.tv_sec = 1;
-	sel_to.tv_usec = 0;
 
 	if (get_first_packet(net_fd, stuffs) == ERROR) {
 		fprintf(stderr, "reading the first packet from client "
@@ -365,6 +361,9 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 	}
 
 	PR_DEBUG("handshake is happened\n");
+
+	sel_to.tv_sec = 1;
+	sel_to.tv_usec = 0;
 
 	for (;;) {
 		FD_ZERO(&rfds);
@@ -385,10 +384,8 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 			if (read_all(tun_fd, stuffs->buffer,
 						BUF_SIZE, &stuffs->tun_nr)
 					== ERROR) {
-				if (stuffs->tun_nr == 0) {
-					err_fl = true;
-					break;
-				}
+				err_fl = true;
+				break;
 			}
 			stuffs->need_icmp = true;
 			PR_DEBUG("send_to_client()\n");
@@ -431,6 +428,4 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 		return ERROR;
 	else
 		return SUCCESS;
-
-	return SUCCESS;
 }
