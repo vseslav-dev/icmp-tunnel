@@ -76,6 +76,8 @@ RC_t write_all(int fd, void *buf, int32_t n, int32_t * tot_write)
 	for (tot = 0; tot < n;) {
 		c = write(fd, (char *)buf + tot, n - tot);
 		if (c == -1 || c == 0) {
+			PR_DEBUG("%s() write() returned %i status\n",
+					__func__, c);
 			if (tot > 0) {
 				*tot_write = tot;
 				return SUCCESS;
@@ -99,6 +101,8 @@ RC_t read_all(int fd, void *buf, int32_t n, int32_t * tot_read)
 	for (tot = 0; tot < n;) {
 		c = read(fd, (char *)buf + tot, n - tot);
 		if (c == -1 || c == 0) {
+			PR_DEBUG("%s() read() returned %i status\n",
+					__func__, c);
 			if (tot > 0) {
 				*tot_read = tot;
 				return SUCCESS;
