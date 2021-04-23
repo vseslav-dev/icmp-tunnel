@@ -85,6 +85,7 @@ RC_t write_all(int fd, void *buf, int32_t n, int32_t * tot_write)
 				return ERROR;
 			}
 		}
+		PR_DEBUG("%s() write %i bytes\n", __func__, c);
 		tot += c;
 	}
 	*tot_write = tot;
@@ -107,6 +108,7 @@ RC_t read_all(int fd, void *buf, int32_t n, int32_t * tot_read)
 				return ERROR;
 			}
 		}
+		PR_DEBUG("%s() read %i bytes\n", __func__, c);
 		tot += c;
 	}
 	*tot_read = tot;
