@@ -24,6 +24,7 @@ RC_t receive_from_server(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 		nr = recvfrom(net_fd, pkt_p, IP_MAXPACKET, 0,
 				(struct sockaddr *)&addr, &addr_len);
 		if (nr == -1) {
+			perror("recvfrom()");
 			if (tot > 0) {
 				stuffs->nr = tot;
 				return SUCCESS;
@@ -31,6 +32,7 @@ RC_t receive_from_server(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 				return ERROR;
 			}
 		}
+		PR_DEBUG("read from net %i bytes\n", nr);
 		if (addr.sin_addr.s_addr != s_addr->sin_addr.s_addr) {
 			PR_DEBUG("packet was received from wrong address: %s\n",
 					inet_ntoa(addr.sin_addr));
@@ -447,14 +449,7 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 				}
 			}
 		} else {
-			if (stuffs->need_icmp == true) {
-				sel_to.tv_sec = 0;
-				sel_to.tv_usec = 0;
-			} else {
-				PR_DEBUG("Idle, no data\n");
-				sel_to.tv_sec = 1;
-				sel_to.tv_usec = 0;
-			}
+			PR_DEBUG("Idle, no data\n");
 			send_pkt_local->hdr.un.echo.sequence =
 				htons(stuffs->seq++);
 			send_pkt_local->len = 0;
