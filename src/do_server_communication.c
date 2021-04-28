@@ -316,7 +316,7 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 	int ret;
 	fd_set rfds;
 	bool err_fl = false;
-	struct timeval sel_to; /* select() timeout */
+	//struct timeval sel_to; /* select() timeout */
 	IcmpStuff_t *stuffs = calloc(1, sizeof(IcmpStuff_t));
 	if (stuffs == NULL) {
 		perror("calloc stuffs");
@@ -368,14 +368,15 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 
 	PR_DEBUG("handshake is happened\n");
 
-	sel_to.tv_sec = 1;
-	sel_to.tv_usec = 0;
+	//sel_to.tv_sec = 1;
+	//sel_to.tv_usec = 0;
 
 	for (;;) {
 		FD_ZERO(&rfds);
 		FD_SET(net_fd, &rfds);
 		FD_SET(tun_fd, &rfds);
-		ret = select(maxfd + 1, &rfds, NULL, NULL, &sel_to);
+		ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
+		//ret = select(maxfd + 1, &rfds, NULL, NULL, &sel_to);
 		if (ret == -1 && errno == EINTR) {
 			continue;
 		}
