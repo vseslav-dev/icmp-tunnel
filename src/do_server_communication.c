@@ -114,7 +114,7 @@ RC_t receive_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 
 RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 {
-	int32_t buf_len = stuffs->nr;
+	int32_t buf_len = stuffs->tun_nr;
 	uint32_t i = (buf_len / PAYLOAD_SIZE), tot = sizeof(struct pkt), n;
 	uint32_t send_cnt, rem = buf_len % PAYLOAD_SIZE;
 	uint8_t *buf = stuffs->buffer;
