@@ -16,6 +16,7 @@
 #endif
 
 typedef enum {
+	NO_ICMP_SEQ = -3,
 	PARSING_ERR = -2,
 	ERROR = -1,
 	SUCCESS = 0,

@@ -95,6 +95,11 @@ RC_t receive_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 		
 		//write data to tun_fd
 		PR_DEBUG("write_all()\n");
+		if (nr <= (int32_t)(PKT_STUFF_SIZE + iphdrlen)) {
+			stuffs->nw = 0;
+			stuffs->nr = 0;
+			return SUCCESS;
+		}
 		if (write_all(tun_fd, ((struct pkt *)((uint8_t *)pkt_p +
 							iphdrlen))->data, nr -
 					(PKT_STUFF_SIZE + iphdrlen), &nw) ==
@@ -130,7 +135,7 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 			PR_DEBUG("ring buffer error or empty\n");
 			if (send_cnt == 0) {
 				stuffs->nw = 0;
-				return ERROR;
+				return NO_ICMP_SEQ;
 			} else {
 				stuffs->nw = send_cnt;
 				return SUCCESS;
@@ -162,7 +167,7 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 			PR_DEBUG("ring buffer error or empty\n");
 			if (send_cnt == 0) {
 				stuffs->nw = 0;
-				return ERROR;
+				return NO_ICMP_SEQ;
 			} else {
 				stuffs->nw = send_cnt;
 				return SUCCESS;
@@ -318,6 +323,7 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 	bool err_fl = false;
 	//struct timeval sel_to; /* select() timeout */
 	IcmpStuff_t *stuffs = calloc(1, sizeof(IcmpStuff_t));
+	RC_t send_ret;
 	if (stuffs == NULL) {
 		perror("calloc stuffs");
 		return ERROR;
@@ -394,21 +400,32 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 				err_fl = true;
 				break;
 			}
-			stuffs->need_icmp = true;
 			PR_DEBUG("send_to_client()\n");
-			if (send_to_client(net_fd, stuffs) == ERROR) {
+			if ((send_ret = send_to_client(net_fd, stuffs)) ==
+					ERROR) {
 				if (stuffs->nw == 0) {
 					err_fl = true;
 					break;
 				}
-			}
-			if (stuffs->tun_nr <= stuffs->nw) {
-				stuffs->need_icmp = false;
-				stuffs->send_pkt->need_icmp_fl = false;
-			} else {
+			} else if (send_ret == NO_ICMP_SEQ) {
 				stuffs->need_icmp = true;
 				stuffs->send_pkt->need_icmp_fl = true;
+				PR_DEBUG("receive_from_client() need icmp\n");
+				if (receive_from_client(net_fd, tun_fd,
+							stuffs) == ERROR) {
+					if (stuffs->nr == 0) {
+						err_fl = true;
+						break;
+					}
+				}
 			}
+			//if (stuffs->tun_nr <= stuffs->nw) {
+			//	stuffs->need_icmp = false;
+			//	stuffs->send_pkt->need_icmp_fl = false;
+			//} else {
+			//	stuffs->need_icmp = true;
+			//	stuffs->send_pkt->need_icmp_fl = true;
+			//}
 		} else if (FD_ISSET(net_fd, &rfds) == true) {
 			PR_DEBUG("receive_from_client()\n");
 			if (receive_from_client(net_fd, tun_fd, stuffs)
@@ -417,6 +434,8 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 					err_fl = true;
 					break;
 				}
+			stuffs->need_icmp = true;
+			stuffs->send_pkt->need_icmp_fl = true;
 			}
 		} else {
 			PR_DEBUG("Idle, no data\n");
