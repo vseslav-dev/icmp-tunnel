@@ -31,6 +31,7 @@ RC_t receive_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 				return ERROR;
 			}
 		}
+		PR_DEBUG("read from net %i bytes\n", nr);
 		if (addr.sin_addr.s_addr != c_addr->sin_addr.s_addr) {
 			PR_DEBUG("packet was received from wrong address: %s\n",
 					inet_ntoa(addr.sin_addr));
