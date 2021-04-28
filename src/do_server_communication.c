@@ -23,6 +23,7 @@ RC_t receive_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 		nr = recvfrom(net_fd, pkt_p, IP_MAXPACKET, 0,
 				(struct sockaddr *)&addr, &addr_len);
 		if (nr == -1) {
+			perror("recvfrom()");
 			if (tot > 0) {
 				stuffs->nr = tot;
 				return SUCCESS;
