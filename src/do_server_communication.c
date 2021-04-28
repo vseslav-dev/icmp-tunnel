@@ -345,6 +345,8 @@ RC_t do_server_communication(NetFD_t * fds, CMD_t * args)
 		free_icmp_stuffs(stuffs);
 		return ERROR;
 	}
+
+	stuffs->cwnd = INITIAL_CWND_SIZE;
 	stuffs->rto = INITIAL_RTO;
 	stuffs->pkt_id = args->session_id;
 	stuffs->send_pkt->hdr.type = ICMP_ECHOREPLY;

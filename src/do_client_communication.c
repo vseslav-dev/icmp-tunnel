@@ -382,6 +382,7 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 		err_fl = true;
 	} */
 
+	stuffs->cwnd = INITIAL_CWND_SIZE;
 	stuffs->rto = INITIAL_RTO;
 	stuffs->pkt_id = args->session_id;
 	stuffs->send_pkt->hdr.un.echo.id = htons(stuffs->pkt_id);
