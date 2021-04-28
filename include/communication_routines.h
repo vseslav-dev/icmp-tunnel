@@ -44,7 +44,7 @@ typedef struct {
 } IcmpStuff_t;
 
 #define ATTEMPT_CNT 3
-#define INITIAL_CWND_SIZE 2
+#define INITIAL_CWND_SIZE 1
 #define INITIAL_RTO 3.5
 #define MAX_CWND_SIZE 2
 #define BUF_SIZE (PAYLOAD_SIZE * MAX_CWND_SIZE)

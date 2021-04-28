@@ -124,7 +124,7 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 	struct sockaddr_in *addr = stuffs->client_addr;
 	pkt_p->len = htons(PAYLOAD_SIZE);
 	pkt_p->cwnd = htons(stuffs->cwnd);
-	PR_DEBUG("%s i = %i, rem = %i\n", __func__, i, rem);
+	PR_DEBUG("%s() i = %i, rem = %i\n", __func__, i, rem);
 	for (n = 0, send_cnt = 0; n < i; n++) {
 		if (rb_get(rb, &rbdata) != RB_SUCCESS) {
 			PR_DEBUG("ring buffer error or empty\n");
@@ -157,7 +157,7 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 			send_cnt += tot - PKT_STUFF_SIZE;
 	}
 	if (rem != 0) {
-		PR_DEBUG("%s rem = %i\n", __func__ , rem);
+		PR_DEBUG("%s() rem = %i\n", __func__ , rem);
 		if (rb_get(rb, &rbdata) != RB_SUCCESS) {
 			PR_DEBUG("ring buffer error or empty\n");
 			if (send_cnt == 0) {
