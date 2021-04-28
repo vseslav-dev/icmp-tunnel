@@ -340,7 +340,7 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 	fd_set rfds;
 	uint32_t pkt_size = PKT_STUFF_SIZE;
 	bool err_fl = false;
-	//struct timeval sel_to; /* select() timeout */
+	struct timeval sel_to; /* select() timeout */
 	struct pkt *send_pkt_local;
 	/*uint32_t ack_num = 0;*/
 	IcmpStuff_t *stuffs = calloc(1, sizeof(IcmpStuff_t));
@@ -405,15 +405,15 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 
 	PR_DEBUG("handshake is happened\n");
 
-	//sel_to.tv_sec = 1;
-	//sel_to.tv_usec = 0;
+	sel_to.tv_sec = 1;
+	sel_to.tv_usec = 0;
 
 	for (;;) {
 		FD_ZERO(&rfds);
 		FD_SET(net_fd, &rfds);
 		FD_SET(tun_fd, &rfds);
-		ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
-		//ret = select(maxfd + 1, &rfds, NULL, NULL, &sel_to);
+		//ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
+		ret = select(maxfd + 1, &rfds, NULL, NULL, &sel_to);
 		if (ret == -1 && errno == EINTR) {
 			continue;
 		}
@@ -450,6 +450,8 @@ RC_t do_client_communication(NetFD_t * fds, CMD_t * args)
 				}
 			}
 		} else {
+			sel_to.tv_sec = 1;
+			sel_to.tv_usec = 0;
 			PR_DEBUG("Idle, no data\n");
 			send_pkt_local->hdr.un.echo.sequence =
 				htons(stuffs->seq++);
