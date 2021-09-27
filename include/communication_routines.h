@@ -50,6 +50,37 @@ typedef struct {
 #define BUF_SIZE (PAYLOAD_SIZE * MAX_CWND_SIZE)
 #define PKT_STUFF_SIZE (sizeof(struct pkt) - PAYLOAD_SIZE)
 
+#define GET_IP_HDR_LEN(pkt_p) (((struct iphdr *)pkt_p)->ihl * sizeof(int))
+#define GET_ICMP_LEN(pkt_p) (ntohs(((struct iphdr *)pkt_p)->tot_len) - iphdrlen)
+#define GET_IP_CKSUM(pkt_p) (((struct iphdr *)pkt_p)->check)
+#define SET_IPHDR_CKSUM_0(pkt_p) (((struct iphdr *)pkt_p)->check = 0)
+#define GET_ICMP_CKSUM(pkt_p) \
+	(((struct icmphdr *)((uint8_t *)pkt_p + iphdrlen))->checksum)
+#define SET_ICMPHDR_CKSUM_0(pkt_p) \
+	(((struct icmphdr *)((uint8_t *)pkt_p + iphdrlen))->checksum = 0)
+#define CHECK_IP_CKSUM(pkt_p, cksum) \
+	(in_cksum((uint16_t *)pkt_p, iphdrlen) == cksum)
+#define CHECK_ICMP_CKSUM(pkt_p, cksum) \
+	(in_cksum(((uint16_t *)((uint8_t *)pkt_p + iphdrlen)), icmplen) == \
+	 cksum)
+#define CHECK_ECHO_ID(pkt_p, pkt_id) \
+	(ntohs(((struct pkt *)((uint8_t *)pkt_p + iphdrlen))->hdr.un.echo.id) \
+	== pkt_id)
+#define CHECK_SESSION_ID(pkt_p, pkt_id) \
+	(ntohs(((struct pkt *)((uint8_t *)pkt_p + iphdrlen))-> \
+	session_id) == pkt_id)
+#define CHECK_OLD_SEQ(pkt_p, pkt_id) \
+	(pkt_id == ntohs(((struct pkt *)((uint8_t *)pkt_p + \
+					  iphdrlen))->hdr.un.echo.sequence))
+#define GET_NEED_ICMP(pkt_p) \
+	(((struct pkt *)((uint8_t *)pkt_p + iphdrlen))->need_icmp_fl)
+#define CHECK_FIRST_PACKET(pkt_p) \
+	(((struct pkt *)((uint8_t *)pkt_p + \
+			 iphdrlen))->first_packet == true)
+#define GET_SEQ(pkt_p) \
+	(ntohs(((struct pkt *)((uint8_t *)stuffs->recv_pkt + iphdrlen))-> \
+			hdr.un.echo.sequence))
+
 RC_t do_client_communication(NetFD_t * fds, CMD_t * args);
 
 RC_t do_server_communication(NetFD_t * fds, CMD_t * args);

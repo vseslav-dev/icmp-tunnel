@@ -40,15 +40,15 @@ RC_t receive_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 			continue;
 		}
 		//get iphdr len and icmp len
-		iphdrlen = ((struct iphdr *)pkt_p)->ihl * sizeof(int);
+		iphdrlen = GET_IP_HDR_LEN(pkt_p);
 		PR_DEBUG("size of iphdr: %u\n", iphdrlen);
-		icmplen = ntohs(((struct iphdr *)pkt_p)->tot_len) - iphdrlen;
+		icmplen = GET_ICMP_LEN(pkt_p);
 		PR_DEBUG("size of icmp: %u\n", icmplen);
 
 		//get check sum of ip header
-		cksum = ((struct iphdr *)pkt_p)->check;
-		((struct iphdr *)pkt_p)->check = 0;
-		if (cksum != in_cksum((uint16_t *)pkt_p, iphdrlen)) {
+		cksum = GET_ICMP_CKSUM(pkt_p);
+		SET_ICMPHDR_CKSUM_0(pkt_p);
+		if (!CHECK_IP_CKSUM(pkt_p, cksum)) {
 			fprintf(stderr, "wrong checksum in ip header 0X%X, "
 					"check sum is: 0X%X\n",
 					in_cksum((uint16_t *)pkt_p, iphdrlen),
@@ -57,11 +57,9 @@ RC_t receive_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 		}
 
 		//get check sum of icmp header
-		cksum = ((struct icmphdr *)((uint8_t *)pkt_p + iphdrlen))->
-			checksum;
-		((struct icmphdr *)((uint8_t *)pkt_p + iphdrlen))->checksum = 0;
-		if (cksum != in_cksum(((uint16_t *)((uint8_t *)pkt_p +
-							iphdrlen)), icmplen)) {
+		cksum = GET_ICMP_CKSUM(pkt_p);
+		SET_ICMPHDR_CKSUM_0(pkt_p);
+		if (!CHECK_ICMP_CKSUM(pkt_p, cksum)) {
 			fprintf(stderr, "check sum of icmp packet 0X%X, "
 					"check sum is: 0X%X\n",
 					in_cksum(((uint16_t *)
@@ -72,8 +70,7 @@ RC_t receive_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 		}
 
 		//check pkt_p->session_id
-		if (ntohs(((struct pkt *)((uint8_t *)pkt_p + iphdrlen))->
-					session_id) != stuffs->pkt_id) {
+		if (!CHECK_SESSION_ID(pkt_p, stuffs->pkt_id)) {
 			fprintf(stderr, "received packet has wrong session id: "
 					"%hu, walid session id: %hu\n",
 					ntohs(((struct pkt *)
@@ -220,17 +217,14 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 		PR_DEBUG("recvfrom finished\n");
 		PR_DEBUG("client addr: %s\n", inet_ntoa(stuffs->client_addr->
 					sin_addr));
-		iphdrlen = ((struct iphdr *)stuffs->recv_pkt)->ihl *
-			sizeof(int);
+		iphdrlen = GET_IP_HDR_LEN(stuffs->recv_pkt);
 		PR_DEBUG("size of iphdr is %i\n", iphdrlen);
-		icmplen = ntohs(((struct iphdr *)stuffs->recv_pkt)->tot_len) -
-			iphdrlen;
+		icmplen = GET_ICMP_LEN(stuffs->recv_pkt);
 		PR_DEBUG("size of icmp packet is %i\n", icmplen);
 		// get check sum of ip header
-		cksum = ((struct iphdr *)stuffs->recv_pkt)->check;
-		((struct iphdr *)stuffs->recv_pkt)->check = 0;
-		if (cksum != in_cksum((uint16_t *)stuffs->recv_pkt,
-				iphdrlen)) {
+		cksum = GET_IP_CKSUM(stuffs->recv_pkt);
+		SET_IPHDR_CKSUM_0(stuffs->recv_pkt);
+		if (!CHECK_IP_CKSUM(stuffs->recv_pkt, cksum)) {
 			fprintf(stderr, "wrong checksum in ip header 0X%X, "
 					"check sum is: 0X%X\n",
 					in_cksum((uint16_t *)stuffs->recv_pkt,
@@ -241,13 +235,9 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 				cksum, in_cksum((uint16_t *)stuffs->recv_pkt,
 					iphdrlen));
 		/* get check sum of icmp header */
-		cksum = ((struct icmphdr *)((uint8_t *)stuffs->recv_pkt +
-				iphdrlen))->checksum;
-		((struct icmphdr *)((uint8_t *)stuffs->recv_pkt +
-		 iphdrlen))->checksum = 0;
-		if (cksum != in_cksum(((uint16_t *)((uint8_t *)stuffs->
-						recv_pkt + iphdrlen)),
-						icmplen)) {
+		cksum = GET_ICMP_CKSUM(stuffs->recv_pkt);
+		SET_ICMPHDR_CKSUM_0(stuffs->recv_pkt);
+		if (!CHECK_ICMP_CKSUM(stuffs->recv_pkt, cksum)) {
 			fprintf(stderr, "check sum of icmp packet 0X%X, "
 					"check sum is: 0X%X\n",
 					in_cksum(((uint16_t *)
@@ -261,8 +251,7 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 				nr,
 				(sizeof(struct pkt) - PAYLOAD_SIZE +
 				 sizeof(struct iphdr)));
-		if (((struct pkt *)((uint8_t *)stuffs->recv_pkt + iphdrlen))->
-				first_packet != true) {
+		if (!CHECK_FIRST_PACKET(stuffs->recv_pkt)) {
 			PR_DEBUG("first packet is not \"first packet\"\n");
 			PR_DEBUG("\"first_packet\" field value is: 0X%X\n",
 					((struct pkt *)
@@ -270,9 +259,7 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 					 iphdrlen))->first_packet);
 			continue;
 		}
-		if (ntohs(((struct pkt *)((uint8_t *)stuffs->recv_pkt +
-							iphdrlen))->
-					session_id) != stuffs->pkt_id) {
+		if (!CHECK_SESSION_ID(stuffs->recv_pkt, stuffs->pkt_id)) {
 			fprintf(stderr, "received packet has wrong session id: "
 					"%hu, walid session id: %hu\n",
 					ntohs(((struct pkt *)
@@ -285,10 +272,7 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 						iphdrlen))->hdr.un.echo.id);
 		PR_DEBUG("changed id: %hu\n", changed_id);
 
-		stuffs->seq
-			= ntohs(((struct pkt *)((uint8_t *)stuffs->recv_pkt +
-						iphdrlen))->
-					hdr.un.echo.sequence);
+		stuffs->seq = GET_SEQ(stuffs->recv_pkt);
 		PR_DEBUG("sequence is: %hu\n", stuffs->seq);
 		PR_DEBUG("session-id is: %hu\n", stuffs->pkt_id);
 		stuffs->send_pkt->hdr.un.echo.id = htons(changed_id);

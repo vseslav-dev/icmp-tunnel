@@ -41,15 +41,15 @@ RC_t receive_from_server(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 			continue;
 		}
 		//get iphdr len and icmp len
-		iphdrlen = ((struct iphdr *)pkt_p)->ihl * sizeof(int);
+		iphdrlen = GET_IP_HDR_LEN(pkt_p);
 		PR_DEBUG("size of iphdr: %u\n", iphdrlen);
-		icmplen = ntohs(((struct iphdr *)pkt_p)->tot_len) - iphdrlen;
+		icmplen = GET_ICMP_LEN(pkt_p);
 		PR_DEBUG("size of icmp: %u\n", icmplen);
 
 		//get check sum of ip header
-		cksum = ((struct iphdr *)pkt_p)->check;
-		((struct iphdr *)pkt_p)->check = 0;
-		if (cksum != in_cksum((uint16_t *)pkt_p, iphdrlen)) {
+		cksum = GET_IP_CKSUM(pkt_p);
+		SET_IPHDR_CKSUM_0(pkt_p);
+		if (CHECK_IP_CKSUM(pkt_p, cksum)) {
 			fprintf(stderr, "wrong checksum in ip header 0X%X, "
 					"check sum is: 0X%X\n",
 					in_cksum((uint16_t *)pkt_p, iphdrlen),
@@ -57,11 +57,9 @@ RC_t receive_from_server(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 			continue;
 		}
 		//get check sum of icmp header
-		cksum = ((struct icmphdr *)((uint8_t *)pkt_p + iphdrlen))->
-			checksum;
-		((struct icmphdr *)((uint8_t *)pkt_p + iphdrlen))->checksum = 0;
-		if (cksum != in_cksum(((uint16_t *)((uint8_t *)pkt_p +
-							iphdrlen)), icmplen)) {
+		cksum = GET_ICMP_CKSUM(pkt_p);
+		SET_ICMPHDR_CKSUM_0(pkt_p);
+		if (!CHECK_ICMP_CKSUM(pkt_p, cksum)) {
 			fprintf(stderr, "check sum of icmp packet 0X%X, "
 					"check sum is: 0X%X\n",
 					in_cksum(((uint16_t *)
@@ -71,31 +69,26 @@ RC_t receive_from_server(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 			continue;
 		}
 		//check hdr.un.echo.id
-		if (ntohs(((struct pkt *)((uint8_t *)pkt_p + iphdrlen))->
-					hdr.un.echo.id) != pkt_id) {
+		if (!CHECK_ECHO_ID(pkt_p, pkt_id)) {
 			fprintf(stderr, "hdr.un.echo.id has wrong id: %hu, "
 					"walid id: %hu\n",
 					ntohs(((struct pkt *)
 					 ((uint8_t *)pkt_p + iphdrlen))->
-						hdr.un.echo.id),
-					stuffs->pkt_id);
+						hdr.un.echo.id), pkt_id);
 			continue;
 		}
 		//check pkt_p->session_id
-		if (ntohs(((struct pkt *)((uint8_t *)pkt_p + iphdrlen))->
-					session_id) != stuffs->pkt_id) {
+		if (!CHECK_SESSION_ID(pkt_p, pkt_id)) {
 			fprintf(stderr, "received packet has wrong session id: "
 					"%hu, walid session id: %hu\n",
 					ntohs(((struct pkt *)
 					((uint8_t *)pkt_p + iphdrlen))->
-						session_id), stuffs->pkt_id);
+						session_id), pkt_id);
 			continue;
 		}
 
 		//check hdr.un.echo.sequence
-		if (old_seq != ntohs(((struct pkt *)((uint8_t *)pkt_p +
-							iphdrlen))->
-					hdr.un.echo.sequence)) {
+		if (!CHECK_OLD_SEQ(pkt_p, old_seq)) {
 			PR_DEBUG("sequence %hu is not a valid sequence %hu\n",
 					ntohs(((struct pkt *)((uint8_t *)pkt_p +
 								iphdrlen))->
@@ -104,8 +97,7 @@ RC_t receive_from_server(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 		++old_seq;
 
 		//store need_icmp_fl flag
-		need_icmp = ((struct pkt *)((uint8_t *)pkt_p + iphdrlen))->
-			need_icmp_fl;
+		need_icmp = GET_NEED_ICMP(pkt_p);;
 		//write data to tun_fd
 		PR_DEBUG("write_all()\n");
 		if (write_all(tun_fd, ((struct pkt *)((uint8_t *)pkt_p +
@@ -248,15 +240,12 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 						server_addr->sin_addr));
 			continue;
 		}
-		iphdrlen = ((struct iphdr *)stuffs->recv_pkt)->ihl *
-			sizeof(int);
-		icmplen = ntohs(((struct iphdr *)stuffs->recv_pkt)->tot_len) -
-			iphdrlen;
+		iphdrlen = GET_IP_HDR_LEN(stuffs->recv_pkt);
+		icmplen = GET_ICMP_LEN(stuffs->recv_pkt);
 		/* get check sum of ip header */
-		cksum = ((struct iphdr *)stuffs->recv_pkt)->check;
-		((struct iphdr *)stuffs->recv_pkt)->check = 0;
-		if (cksum != in_cksum((uint16_t *)stuffs->recv_pkt,
-				iphdrlen)) {
+		cksum = GET_IP_CKSUM(stuffs->recv_pkt);
+		SET_IPHDR_CKSUM_0(stuffs->recv_pkt);
+		if (!CHECK_IP_CKSUM(stuffs->recv_pkt, cksum)) {
 			fprintf(stderr, "wrong checksum in ip header 0X%X, "
 					"check sum is: 0X%X\n",
 					in_cksum((uint16_t *)stuffs->recv_pkt,
@@ -264,13 +253,9 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 			continue;
 		}
 		/* get check sum of icmp header */
-		cksum = ((struct icmphdr *)((uint8_t *)stuffs->recv_pkt +
-				iphdrlen))->checksum;
-		((struct icmphdr *)((uint8_t *)stuffs->recv_pkt + iphdrlen))->
-			checksum = 0;
-		if (cksum != in_cksum(((uint16_t *)((uint8_t *)stuffs->
-						recv_pkt + iphdrlen)),
-						icmplen)) {
+		cksum = GET_ICMP_CKSUM(stuffs->recv_pkt);
+		SET_ICMPHDR_CKSUM_0(stuffs->recv_pkt);
+		if (CHECK_ICMP_CKSUM(stuffs->recv_pkt, cksum)) {
 			fprintf(stderr, "check sum of icmp packet 0X%X, "
 					"check sum is: 0X%X\n",
 					in_cksum(((uint16_t *)
@@ -283,8 +268,7 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 				nr,
 				(sizeof(struct pkt) - PAYLOAD_SIZE +
 				 sizeof(struct iphdr)));
-		if (((struct pkt *)((uint8_t *)stuffs->recv_pkt + iphdrlen))->
-				first_packet != true) {
+		if (!CHECK_FIRST_PACKET(stuffs->recv_pkt)) {
 			PR_DEBUG("first packet is not \"first packet\"\n");
 			PR_DEBUG("\"first_packet\" field value is: 0X%X\n",
 					((struct pkt *)
@@ -292,9 +276,7 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 					 iphdrlen))->first_packet);
 			continue;
 		}
-		if (ntohs(((struct pkt *)((uint8_t *)stuffs->recv_pkt +
-							iphdrlen))->
-					hdr.un.echo.id) != stuffs->pkt_id) {
+		if (!CHECK_ECHO_ID(stuffs->recv_pkt, stuffs->pkt_id)) {
 			fprintf(stderr, "hdr.un.echo.id has wrong id: %hu, "
 					"walid id: %hu\n",
 					ntohs(((struct pkt *)
@@ -304,9 +286,7 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 			continue;
 		}
 
-		if (ntohs(((struct pkt *)((uint8_t *)stuffs->recv_pkt +
-							iphdrlen))->
-					session_id) != stuffs->pkt_id) {
+		if (!CHECK_SESSION_ID(stuffs->recv_pkt, stuffs->pkt_id)) {
 			fprintf(stderr, "received packet has wrong session id: "
 					"%hu, walid session id: %hu\n",
 					ntohs(((struct pkt *)
@@ -315,9 +295,7 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 					stuffs->pkt_id);
 			continue;
 		}
-		if (seq != ntohs(((struct pkt *)((uint8_t *)stuffs->recv_pkt +
-						iphdrlen))->
-					hdr.un.echo.sequence)) {
+		if (!CHECK_OLD_SEQ(stuffs->recv_pkt, seq)) {
 			PR_DEBUG("sequence %hu is not a valid sequence %hu\n",
 					ntohs(((struct pkt *)
 							((uint8_t *)stuffs->

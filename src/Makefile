@@ -8,7 +8,7 @@ INSTALL_DIR	:= /opt
 
 
 $(PROG): $(OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) -o $@ $^ $(LDFLAGS) 
 
 %.o: %.d
 
