@@ -8,6 +8,13 @@
 #include <communication_routines.h>
 #include <ring_buffer.h>
 
+/*
+ * Byte order rule:
+ *  - struct pkt fields: NETWORK byte order
+ *  - internal structs (RBData_t, IcmpStuff_t): HOST byte order
+ *  - convert ONLY at ingress/egress
+ */
+
 RC_t receive_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 {
 	socklen_t addr_len = sizeof(struct sockaddr);
@@ -80,13 +87,14 @@ RC_t receive_from_client(int net_fd, int tun_fd, IcmpStuff_t * stuffs)
 		}
 
 		//check hdr.un.echo.sequence
-		rbdata.icmp_sequence = ((struct pkt *)((uint8_t *)pkt_p +
-							iphdrlen))->
-					hdr.un.echo.sequence;
+		rbdata.icmp_sequence =
+			ntohs(((struct pkt *)((uint8_t *)pkt_p + iphdrlen))
+					->hdr.un.echo.sequence);
 
 		//check hdr.un.echo.id
-		rbdata.id = ((struct pkt *)((uint8_t *)pkt_p + iphdrlen))->
-				hdr.un.echo.id;
+		rbdata.id =
+			ntohs(((struct pkt *)((uint8_t *)pkt_p + iphdrlen))
+					->hdr.un.echo.id);
 
 		rb_put(rb, rbdata);
 		
@@ -138,8 +146,10 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 				return SUCCESS;
 			}
 		}
-		pkt_p->hdr.un.echo.sequence = rbdata.icmp_sequence;
-		pkt_p->hdr.un.echo.id = rbdata.id;
+		pkt_p->hdr.un.echo.sequence =
+			htons(rbdata.icmp_sequence);
+		pkt_p->hdr.un.echo.id =
+			htons(rbdata.id);
 		memcpy((void *)pkt_p->data,
 				(const void *)(buf + send_cnt), PAYLOAD_SIZE);
 		pkt_p->hdr.checksum = 0;
@@ -170,8 +180,10 @@ RC_t send_to_client(int net_fd, IcmpStuff_t * stuffs)
 				return SUCCESS;
 			}
 		}
-		pkt_p->hdr.un.echo.sequence = rbdata.icmp_sequence;
-		pkt_p->hdr.un.echo.id = rbdata.id;
+		pkt_p->hdr.un.echo.sequence =
+			htons(rbdata.icmp_sequence);
+		pkt_p->hdr.un.echo.id =
+			htons(rbdata.id);
 		pkt_p->len = htons(rem);
 		pkt_p->hdr.checksum = 0;
 		memcpy((void *)pkt_p->data, (const void *)(buf + send_cnt),
@@ -275,8 +287,10 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 		stuffs->seq = GET_SEQ(stuffs->recv_pkt);
 		PR_DEBUG("sequence is: %hu\n", stuffs->seq);
 		PR_DEBUG("session-id is: %hu\n", stuffs->pkt_id);
-		stuffs->send_pkt->hdr.un.echo.id = htons(changed_id);
-		stuffs->send_pkt->hdr.un.echo.sequence = htons(stuffs->seq);
+		stuffs->send_pkt->hdr.un.echo.id =
+			htons(changed_id);
+		stuffs->send_pkt->hdr.un.echo.sequence =
+			htons(stuffs->seq);
 		stuffs->send_pkt->first_packet = true;
 		stuffs->send_pkt->len = 0;
 		stuffs->send_pkt->hdr.checksum = 0;
