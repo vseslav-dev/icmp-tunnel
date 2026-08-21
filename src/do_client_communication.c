@@ -219,7 +219,7 @@ RC_t send_first_packet(int net_fd, IcmpStuff_t * stuffs)
 			return ERROR;
 		}
 		if ((nr = recvfrom(net_fd, stuffs->recv_pkt,
-					IP_MAXPACKET, MSG_WAITALL,
+					IP_MAXPACKET, 0,
 					(struct sockaddr *)&addr,
 					&sock_len)) == -1) {
 			perror("recvfrom firts packet from server");

@@ -220,7 +220,7 @@ RC_t get_first_packet(int net_fd, IcmpStuff_t * stuffs)
 	for (i = 0; i < ATTEMPT_CNT && !complete; i++) {
 		PR_DEBUG("recvfrom starts\n");
 		if ((nr = recvfrom(net_fd, stuffs->recv_pkt,
-					IP_MAXPACKET, MSG_WAITALL,
+					IP_MAXPACKET, 0,
 					(struct sockaddr *)stuffs->client_addr,
 					&sock_len)) == -1) {
 			perror("recvfrom firts packet from client");
